@@ -1,6 +1,7 @@
 import requests
 
 from app.models import JobPosting
+from app.services.location import location_text_matches
 
 
 def search_arbeitnow(query: str, location: str = "") -> list[JobPosting]:
@@ -12,8 +13,6 @@ def search_arbeitnow(query: str, location: str = "") -> list[JobPosting]:
     results: list[JobPosting] = []
 
     query_lower = query.lower().strip()
-    location_lower = location.lower().strip()
-
     for item in data:
         title = item.get("title") or ""
         company = item.get("company_name") or ""
@@ -24,7 +23,11 @@ def search_arbeitnow(query: str, location: str = "") -> list[JobPosting]:
         if query_lower and query_lower not in searchable:
             continue
 
-        if location_lower and location_lower not in job_location.lower():
+        if location and not location_text_matches(
+            job_location,
+            location,
+            "remote" in job_location.lower(),
+        ):
             continue
 
         results.append(
@@ -42,4 +45,3 @@ def search_arbeitnow(query: str, location: str = "") -> list[JobPosting]:
         )
 
     return results
-

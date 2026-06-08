@@ -12,6 +12,7 @@ from app.providers.jsearch import search_jsearch
 from app.providers.jooble import search_jooble
 from app.providers.remotive import search_remotive
 from app.services.deduplicate import deduplicate_jobs
+from app.services.location import filter_jobs_by_location, provider_location_query
 from app.services.normalize import normalize_jobs
 from app.services.query_expansion import expanded_job_queries, expanded_relevance_terms
 from app.services.relevance import filter_jobs_by_any_term, filter_relevant_jobs
@@ -78,6 +79,7 @@ def search_jobs(
     errors: dict[str, str] = {}
     source_counts: dict[str, int] = {source: 0 for source in selected_sources}
     search_queries = expanded_job_queries(query)
+    search_location = provider_location_query(location)
 
     for source in selected_sources:
         for search_query in search_queries:
@@ -86,7 +88,7 @@ def search_jobs(
                     source,
                     PROVIDERS[source],
                     query=search_query,
-                    location=location,
+                    location=search_location,
                     country=country,
                 )
                 jobs.extend(provider_jobs)
@@ -95,6 +97,7 @@ def search_jobs(
                 break
 
     normalized = normalize_jobs(jobs)
+    normalized = filter_jobs_by_location(normalized, location)
     normalized = filter_jobs_by_any_term(normalized, expanded_relevance_terms(query))
     relevance_query = "" if len(search_queries) > 1 else query
     normalized = filter_relevant_jobs(normalized, relevance_query)

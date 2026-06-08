@@ -1,6 +1,7 @@
 import requests
 
 from app.models import JobPosting
+from app.services.location import location_text_matches
 
 
 def search_remotive(query: str, location: str = "") -> list[JobPosting]:
@@ -16,11 +17,10 @@ def search_remotive(query: str, location: str = "") -> list[JobPosting]:
     response.raise_for_status()
 
     results: list[JobPosting] = []
-    location_lower = location.lower().strip()
 
     for item in response.json().get("jobs", []):
         candidate_location = item.get("candidate_required_location") or "Remote"
-        if location_lower and location_lower not in candidate_location.lower():
+        if location and not location_text_matches(candidate_location, location, True):
             continue
 
         results.append(
@@ -38,4 +38,3 @@ def search_remotive(query: str, location: str = "") -> list[JobPosting]:
         )
 
     return results
-
