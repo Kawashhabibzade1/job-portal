@@ -40,6 +40,7 @@ PROVIDERS: dict[str, Provider] = {
 }
 
 
+@app.get("/api/health")
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok"}
@@ -64,6 +65,7 @@ def _run_provider(
     return provider(query, location)
 
 
+@app.get("/jobs/search", response_model=JobSearchResponse)
 @app.get("/api/jobs/search", response_model=JobSearchResponse)
 def search_jobs(
     query: str = Query(default="", description="Job title, skill, or company"),
@@ -111,6 +113,7 @@ def search_jobs(
     )
 
 
+@app.get("/jobs", response_model=JobSearchResponse)
 @app.get("/api/jobs", response_model=JobSearchResponse)
 def search_jobs_alias(
     query: str = "",
