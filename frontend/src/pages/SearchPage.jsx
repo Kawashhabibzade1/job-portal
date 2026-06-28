@@ -6,11 +6,7 @@ import JobCard from "../components/JobCard.jsx";
 
 const PROVIDERS = [
   { key: "arbeitsagentur", label: "Arbeitsagentur", countries: ["de"] },
-  { key: "arbeitnow", label: "Arbeitnow", countries: ["de", "at", "ch", "gb"] },
-  { key: "remotive", label: "Remotive", countries: ["de", "at", "ch", "gb", "tr"], remoteOnly: true },
-  { key: "adzuna", label: "Adzuna", countries: ["de", "at", "ch", "gb"] },
-  { key: "jsearch", label: "JSearch", countries: ["de", "at", "ch", "gb", "tr"] },
-  { key: "jooble", label: "Jooble", countries: ["de", "at", "ch", "gb", "tr"] },
+  { key: "arbeitnow", label: "Arbeitnow", countries: ["de"] },
   { key: "karriere_at", label: "Karriere.at", countries: ["at"] },
   { key: "jobs_ch", label: "Jobs.ch", countries: ["ch"] },
   { key: "jobup_ch", label: "Jobup.ch", countries: ["ch"] },
@@ -239,6 +235,11 @@ export default function SearchPage() {
                   Sources
                 </legend>
                 <div className="grid grid-cols-2 gap-2">
+                  {availableProviders.length === 0 && (
+                    <p className="col-span-2 rounded-lg border border-line bg-slate-50 px-3 py-2 text-sm text-slate-600">
+                      No local source configured for the selected country.
+                    </p>
+                  )}
                   {availableProviders.map((provider) => {
                     const checked = selectedSources.includes(provider.key);
                     return (

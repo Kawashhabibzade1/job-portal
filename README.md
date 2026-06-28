@@ -20,26 +20,28 @@ Available endpoints:
 - `GET /health`
 - `GET /api/jobs/search?query=python&location=berlin&country=de`
 
-Adzuna, JSearch, and Jooble require API keys. Arbeitnow, Remotive, Arbeitsagentur, and the direct portal searches can return results without personal keys.
+Adzuna, JSearch, and Jooble require API keys. The country source picker only shows local or country-specific portals; generic aggregators are not shown as local country sources.
 
 Configured providers:
 
 - Arbeitsagentur: German job listings with apply links
 - Arbeitnow: Europe-focused tech jobs
-- Remotive: remote jobs
-- Adzuna: broad job search with `ADZUNA_APP_ID` and `ADZUNA_APP_KEY`
-- JSearch: RapidAPI job search with `JSEARCH_API_KEY`
-- Jooble: broad job search with `JOOBLE_API_KEY`
 - Karriere.at: Austria-focused public portal search
 - Jobs.ch: Switzerland-focused public portal search
 - Jobup.ch: Switzerland-focused public portal search
 - Reed UK: United Kingdom-focused public portal search
+- Adzuna: broad job search with `ADZUNA_APP_ID` and `ADZUNA_APP_KEY`
+- JSearch: RapidAPI job search with `JSEARCH_API_KEY`
+- Jooble: broad job search with `JOOBLE_API_KEY`
+- Remotive: remote jobs
 
-Country coverage notes:
+Local source map:
 
-- Austria: use `country=at` with Adzuna/JSearch/Jooble and enable `karriere_at` for a well-known local Austrian portal.
-- Switzerland: use `country=ch` with Adzuna/JSearch/Jooble and enable `jobs_ch` or `jobup_ch` for well-known local Swiss portals.
-- United Kingdom: use `country=gb` with Adzuna/JSearch/Jooble and enable `reed_uk` for a broad local UK portal.
+- Germany: `arbeitsagentur`, `arbeitnow`
+- Austria: `karriere_at`
+- Switzerland: `jobs_ch`, `jobup_ch`
+- United Kingdom: `reed_uk`
+- Northern Cyprus: no local source configured yet
 
 ## Frontend
 

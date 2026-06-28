@@ -65,6 +65,7 @@ SUPPORTED_COUNTRIES = {
 
 SOURCE_COUNTRIES = {
     "arbeitsagentur": {"de"},
+    "arbeitnow": {"de"},
     "karriere_at": {"at"},
     "jobs_ch": {"ch"},
     "jobup_ch": {"ch"},
@@ -80,7 +81,7 @@ def health() -> dict[str, str]:
 
 def _selected_sources(sources: str | None) -> list[str]:
     if not sources:
-        return list(PROVIDERS.keys())
+        return list(SOURCE_COUNTRIES.keys())
     selected = [source.strip().lower() for source in sources.split(",") if source.strip()]
     return [source for source in selected if source in PROVIDERS]
 
@@ -103,7 +104,7 @@ def _selected_countries(country: str) -> list[str]:
 
 def _source_supports_country(source: str, country: str) -> bool:
     supported = SOURCE_COUNTRIES.get(source)
-    return not supported or country in supported
+    return bool(supported and country in supported)
 
 
 def _provider_location(source: str, location: str, country: str) -> str:
@@ -140,8 +141,12 @@ def search_jobs(
     sources: str | None = Query(default=None, description="Comma-separated source keys"),
     include_remote: bool = Query(default=False, description="Include remote jobs"),
 ) -> JobSearchResponse:
-    selected_sources = _selected_sources(sources)
     selected_countries = _selected_countries(country)
+    selected_sources = [
+        source
+        for source in _selected_sources(sources)
+        if any(_source_supports_country(source, search_country) for search_country in selected_countries)
+    ]
     jobs: list[JobPosting] = []
     errors: dict[str, str] = {}
     source_counts: dict[str, int] = {source: 0 for source in selected_sources}
