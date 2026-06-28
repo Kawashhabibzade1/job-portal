@@ -11,6 +11,10 @@ const PROVIDERS = [
   { key: "adzuna", label: "Adzuna" },
   { key: "jsearch", label: "JSearch" },
   { key: "jooble", label: "Jooble" },
+  { key: "karriere_at", label: "Karriere.at" },
+  { key: "jobs_ch", label: "Jobs.ch" },
+  { key: "jobup_ch", label: "Jobup.ch" },
+  { key: "reed_uk", label: "Reed UK" },
 ];
 
 const COUNTRIES = [

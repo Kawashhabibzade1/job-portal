@@ -10,6 +10,12 @@ from app.providers.arbeitsagentur import search_arbeitsagentur
 from app.providers.arbeitnow import search_arbeitnow
 from app.providers.jsearch import search_jsearch
 from app.providers.jooble import search_jooble
+from app.providers.portal_search import (
+    search_jobs_ch,
+    search_jobup_ch,
+    search_karriere_at,
+    search_reed_uk,
+)
 from app.providers.remotive import search_remotive
 from app.services.deduplicate import deduplicate_jobs
 from app.services.location import filter_jobs_by_location, provider_location_query
@@ -38,6 +44,10 @@ PROVIDERS: dict[str, Provider] = {
     "remotive": search_remotive,
     "jsearch": search_jsearch,
     "jooble": search_jooble,
+    "karriere_at": search_karriere_at,
+    "jobs_ch": search_jobs_ch,
+    "jobup_ch": search_jobup_ch,
+    "reed_uk": search_reed_uk,
 }
 
 
@@ -52,6 +62,10 @@ def _selected_sources(sources: str | None) -> list[str]:
         return list(PROVIDERS.keys())
     selected = [source.strip().lower() for source in sources.split(",") if source.strip()]
     return [source for source in selected if source in PROVIDERS]
+
+
+def _source_key(source: str) -> str:
+    return source.lower().replace(".", "_").replace("-", "_").replace(" ", "_")
 
 
 def _run_provider(
@@ -103,7 +117,8 @@ def search_jobs(
     normalized = filter_relevant_jobs(normalized, relevance_query)
     unique = deduplicate_jobs(normalized)
     for job in unique:
-        source_counts[job.source.lower()] = source_counts.get(job.source.lower(), 0) + 1
+        source_key = _source_key(job.source)
+        source_counts[source_key] = source_counts.get(source_key, 0) + 1
 
     return JobSearchResponse(
         query=query,
