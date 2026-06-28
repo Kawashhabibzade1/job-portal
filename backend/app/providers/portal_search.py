@@ -131,6 +131,44 @@ def _reed_url(query: str, location: str) -> str:
     return f"https://www.reed.co.uk/jobs/{query_slug}-jobs"
 
 
+def _nhs_jobs_url(query: str, location: str) -> str:
+    params = {"keyword": query, "language": "en"}
+    if location:
+        params["location"] = location
+    return f"https://www.jobs.nhs.uk/candidate/search/results?{urlencode(params)}"
+
+
+def _healthjobs_uk_url(query: str, location: str) -> str:
+    params = {"keyword": query}
+    if location:
+        params["location"] = location
+    return f"https://www.healthjobsuk.com/job_search?{urlencode(params)}"
+
+
+def _jobs_ac_uk_url(query: str, location: str) -> str:
+    params = {"keywords": query}
+    if location:
+        params["location"] = location
+    else:
+        params["location"] = "United Kingdom"
+    return f"https://www.jobs.ac.uk/search/?{urlencode(params)}"
+
+
+def _new_scientist_url(query: str, location: str) -> str:
+    params = {"keywords": query}
+    if location:
+        params["location"] = location
+    return f"https://jobs.newscientist.com/jobs/?{urlencode(params)}"
+
+
+def _ifs_url(query: str, location: str) -> str:
+    return "https://ifs.org.uk/jobs"
+
+
+def _arcs_url(query: str, location: str) -> str:
+    return "https://www.arcscientists.org/jobs-and-training/"
+
+
 def _parse_karriere(text: str, portal: Portal) -> list[JobPosting]:
     results: list[JobPosting] = []
     blocks = re.findall(
@@ -294,6 +332,189 @@ def _parse_reed(text: str, portal: Portal) -> list[JobPosting]:
     return results
 
 
+def _parse_nhs_jobs(text: str, portal: Portal) -> list[JobPosting]:
+    results: list[JobPosting] = []
+    blocks = re.findall(
+        r'<li class="nhsuk-list-panel search-result[^"]*"[^>]*>.*?</li>\s*</ul>\s*</div>\s*</div>\s*</li>|<li class="nhsuk-list-panel search-result[^"]*"[^>]*>.*?</li>',
+        text,
+        flags=re.DOTALL,
+    )
+    if not blocks:
+        blocks = re.findall(
+            r'<li class="nhsuk-list-panel search-result.*?(?=<li class="nhsuk-list-panel search-result|\s*</ul>)',
+            text,
+            flags=re.DOTALL,
+        )
+
+    for block in blocks:
+        title_link = re.search(
+            r'<a(?=[^>]*data-test="search-result-job-title")[^>]*href="([^"]+)"[^>]*>(.*?)</a>',
+            block,
+            flags=re.DOTALL,
+        )
+        if not title_link:
+            continue
+
+        location_block = re.search(
+            r'data-test="search-result-location"[^>]*>.*?<h3[^>]*>(.*?)</h3>',
+            block,
+            flags=re.DOTALL,
+        )
+        location_parts = []
+        company = None
+        if location_block:
+            location_text = _clean(location_block.group(1))
+            if location_text:
+                lines = [part.strip() for part in location_text.split("  ") if part.strip()]
+                company = lines[0] if lines else location_text
+                location_parts = lines[1:]
+
+        salary = re.search(r'data-test="search-result-salary"[^>]*>(.*?)</li>', block, re.DOTALL)
+        posted = re.search(
+            r'data-test="search-result-publicationDate"[^>]*>.*?<strong[^>]*>(.*?)</strong>',
+            block,
+            re.DOTALL,
+        )
+        description = " | ".join(
+            item
+            for item in [
+                _clean(salary.group(1)) if salary else None,
+                f"Date posted: {_clean(posted.group(1))}" if posted else None,
+            ]
+            if item
+        )
+
+        results.append(
+            JobPosting(
+                title=_clean(title_link.group(2)) or "",
+                company=company,
+                location=_portal_location(
+                    portal,
+                    ", ".join(location_parts) if location_parts else None,
+                ),
+                description=description or None,
+                source=portal.source,
+                source_url=_absolute_url(portal, title_link.group(1)),
+                apply_url=_absolute_url(portal, title_link.group(1)),
+                date_posted=_clean(posted.group(1)) if posted else None,
+                is_remote="remote" in block.lower() or "home based" in block.lower(),
+            )
+        )
+
+    return results[:25]
+
+
+def _parse_jobs_ac_uk(text: str, portal: Portal) -> list[JobPosting]:
+    results: list[JobPosting] = []
+    blocks = re.findall(
+        r'<div class="j-search-result__result[^"]*"[^>]*>.*?(?=<div class="j-search-result__result|\s*</div>\s*</div>\s*</div>)',
+        text,
+        flags=re.DOTALL,
+    )
+
+    for block in blocks:
+        title_link = re.search(r'<a href="([^"]+)">(.*?)</a>', block, flags=re.DOTALL)
+        if not title_link:
+            continue
+
+        company = re.search(
+            r'<div class="j-search-result__employer">\s*<b>(.*?)</b>',
+            block,
+            flags=re.DOTALL,
+        )
+        location = re.search(r'<div>\s*Location:\s*(.*?)</div>', block, flags=re.DOTALL)
+        salary = re.search(
+            r'<div class="j-search-result__info">\s*(.*?)</div>',
+            block,
+            flags=re.DOTALL,
+        )
+        posted = re.search(r'<strong>Date Placed: </strong>\s*(.*?)\s*</div>', block, re.DOTALL)
+
+        location_text = _clean(location.group(1)) if location else None
+        results.append(
+            JobPosting(
+                title=_clean(title_link.group(2)) or "",
+                company=_clean(company.group(1)) if company else None,
+                location=_portal_location(portal, location_text),
+                description=_clean(salary.group(1)) if salary else None,
+                source=portal.source,
+                source_url=_absolute_url(portal, title_link.group(1)),
+                apply_url=_absolute_url(portal, title_link.group(1)),
+                date_posted=_clean(posted.group(1)) if posted else None,
+                is_remote=bool(location_text and "hybrid" in location_text.lower()),
+            )
+        )
+
+    return results[:25]
+
+
+def _parse_arcs(text: str, portal: Portal) -> list[JobPosting]:
+    results: list[JobPosting] = []
+    blocks = re.findall(r'<div class="job_container job-card[^"]*"[^>]*>.*?</div>\s*</div>', text, re.DOTALL)
+    for block in blocks:
+        link = re.search(r'<div class="job_link">\s*<a href="([^"]+)"', block, re.DOTALL)
+        title = re.search(r'<div class="job_title">\s*(.*?)\s*</div>', block, re.DOTALL)
+        location = re.search(r'<div class="job_location job-tag">\s*(.*?)\s*</div>', block, re.DOTALL)
+        job_type = re.search(r'<div class="job_type job-tag">\s*(.*?)\s*</div>', block, re.DOTALL)
+        salary = re.search(r'<div class="salary job-tag">\s*(.*?)\s*</div>', block, re.DOTALL)
+        if not title:
+            continue
+
+        results.append(
+            JobPosting(
+                title=_clean(title.group(1)) or "",
+                location=_portal_location(portal, _clean(location.group(1)) if location else None),
+                description=" | ".join(
+                    item
+                    for item in [
+                        _clean(job_type.group(1)) if job_type else None,
+                        _clean(salary.group(1)) if salary else None,
+                    ]
+                    if item
+                )
+                or None,
+                source=portal.source,
+                source_url=_absolute_url(portal, link.group(1)) if link else portal.base_url,
+                apply_url=_absolute_url(portal, link.group(1)) if link else portal.base_url,
+                is_remote=False,
+            )
+        )
+
+    return results[:25]
+
+
+def _parse_ifs(text: str, portal: Portal) -> list[JobPosting]:
+    results: list[JobPosting] = []
+    blocks = re.findall(r'<article[^>]*>.*?</article>', text, re.DOTALL)
+    for block in blocks:
+        if "job" not in block.lower() and "vacanc" not in block.lower():
+            continue
+        link = re.search(r'<a[^>]+href="([^"]+)"[^>]*>(.*?)</a>', block, re.DOTALL)
+        title = _clean(link.group(2)) if link else None
+        if not title:
+            heading = re.search(r'<h[2-4][^>]*>(.*?)</h[2-4]>', block, re.DOTALL)
+            title = _clean(heading.group(1)) if heading else None
+        if not title:
+            continue
+        results.append(
+            JobPosting(
+                title=title,
+                location=_portal_location(portal, "London"),
+                source=portal.source,
+                source_url=_absolute_url(portal, link.group(1)) if link else portal.base_url,
+                apply_url=_absolute_url(portal, link.group(1)) if link else portal.base_url,
+                is_remote=False,
+            )
+        )
+    return results[:25]
+
+
+def _parse_closed_or_blocked(text: str, portal: Portal) -> list[JobPosting]:
+    if "has now closed" in text.lower():
+        return []
+    return []
+
+
 PORTALS = {
     "karriere_at": Portal(
         source="Karriere.at",
@@ -323,6 +544,48 @@ PORTALS = {
         parser=_parse_reed,
         country_name="United Kingdom",
     ),
+    "nhs_jobs": Portal(
+        source="NHS Jobs",
+        base_url="https://www.jobs.nhs.uk",
+        url_builder=_nhs_jobs_url,
+        parser=_parse_nhs_jobs,
+        country_name="United Kingdom",
+    ),
+    "healthjobs_uk": Portal(
+        source="HealthJobsUK",
+        base_url="https://www.healthjobsuk.com",
+        url_builder=_healthjobs_uk_url,
+        parser=_parse_closed_or_blocked,
+        country_name="United Kingdom",
+    ),
+    "jobs_ac_uk": Portal(
+        source="Jobs.ac.uk",
+        base_url="https://www.jobs.ac.uk",
+        url_builder=_jobs_ac_uk_url,
+        parser=_parse_jobs_ac_uk,
+        country_name="United Kingdom",
+    ),
+    "new_scientist_jobs": Portal(
+        source="New Scientist Jobs",
+        base_url="https://jobs.newscientist.com",
+        url_builder=_new_scientist_url,
+        parser=_parse_closed_or_blocked,
+        country_name="United Kingdom",
+    ),
+    "ifs_uk": Portal(
+        source="IFS",
+        base_url="https://ifs.org.uk/jobs",
+        url_builder=_ifs_url,
+        parser=_parse_ifs,
+        country_name="United Kingdom",
+    ),
+    "arcs_community": Portal(
+        source="ARCS Community",
+        base_url="https://www.arcscientists.org",
+        url_builder=_arcs_url,
+        parser=_parse_arcs,
+        country_name="United Kingdom",
+    ),
 }
 
 
@@ -330,7 +593,12 @@ def search_portal(portal_key: str, query: str, location: str = "") -> list[JobPo
     portal = PORTALS[portal_key]
     if not query.strip():
         query = "jobs"
-    html_text = _fetch(portal.url_builder(query, location))
+    try:
+        html_text = _fetch(portal.url_builder(query, location))
+    except requests.HTTPError as exc:
+        if exc.response is not None and exc.response.status_code in {403, 404, 406}:
+            return []
+        raise
     jobs = portal.parser(html_text, portal)
     search_note = f"Search match: {query}"
 
@@ -365,3 +633,27 @@ def search_jobup_ch(query: str, location: str = "") -> list[JobPosting]:
 
 def search_reed_uk(query: str, location: str = "") -> list[JobPosting]:
     return search_portal("reed_uk", query, location)
+
+
+def search_nhs_jobs(query: str, location: str = "") -> list[JobPosting]:
+    return search_portal("nhs_jobs", query, location)
+
+
+def search_healthjobs_uk(query: str, location: str = "") -> list[JobPosting]:
+    return search_portal("healthjobs_uk", query, location)
+
+
+def search_jobs_ac_uk(query: str, location: str = "") -> list[JobPosting]:
+    return search_portal("jobs_ac_uk", query, location)
+
+
+def search_new_scientist_jobs(query: str, location: str = "") -> list[JobPosting]:
+    return search_portal("new_scientist_jobs", query, location)
+
+
+def search_ifs_uk(query: str, location: str = "") -> list[JobPosting]:
+    return search_portal("ifs_uk", query, location)
+
+
+def search_arcs_community(query: str, location: str = "") -> list[JobPosting]:
+    return search_portal("arcs_community", query, location)

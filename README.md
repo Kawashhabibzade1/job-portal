@@ -30,6 +30,12 @@ Configured providers:
 - Jobs.ch: Switzerland-focused public portal search
 - Jobup.ch: Switzerland-focused public portal search
 - Reed UK: United Kingdom-focused public portal search
+- NHS Jobs: United Kingdom health-sector public portal search
+- HealthJobsUK: United Kingdom health-sector portal search
+- Jobs.ac.uk: United Kingdom academic job search
+- New Scientist Jobs: United Kingdom science job portal
+- IFS: United Kingdom Institute for Fiscal Studies jobs page
+- ARCS Community: United Kingdom ARCS jobs board
 - Adzuna: broad job search with `ADZUNA_APP_ID` and `ADZUNA_APP_KEY`
 - JSearch: RapidAPI job search with `JSEARCH_API_KEY`
 - Jooble: broad job search with `JOOBLE_API_KEY`
@@ -40,7 +46,7 @@ Local source map:
 - Germany: `arbeitsagentur`, `arbeitnow`
 - Austria: `karriere_at`
 - Switzerland: `jobs_ch`, `jobup_ch`
-- United Kingdom: `reed_uk`
+- United Kingdom: `reed_uk`, `nhs_jobs`, `healthjobs_uk`, `jobs_ac_uk`, `new_scientist_jobs`, `ifs_uk`, `arcs_community`
 - Northern Cyprus: no local source configured yet
 
 ## Frontend

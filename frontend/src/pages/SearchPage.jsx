@@ -11,6 +11,12 @@ const PROVIDERS = [
   { key: "jobs_ch", label: "Jobs.ch", countries: ["ch"] },
   { key: "jobup_ch", label: "Jobup.ch", countries: ["ch"] },
   { key: "reed_uk", label: "Reed UK", countries: ["gb"] },
+  { key: "nhs_jobs", label: "NHS Jobs", countries: ["gb"] },
+  { key: "healthjobs_uk", label: "HealthJobsUK", countries: ["gb"] },
+  { key: "jobs_ac_uk", label: "Jobs.ac.uk", countries: ["gb"] },
+  { key: "new_scientist_jobs", label: "New Scientist Jobs", countries: ["gb"] },
+  { key: "ifs_uk", label: "IFS", countries: ["gb"] },
+  { key: "arcs_community", label: "ARCS Community", countries: ["gb"] },
 ];
 
 const COUNTRIES = [

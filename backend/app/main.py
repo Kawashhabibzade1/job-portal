@@ -11,9 +11,15 @@ from app.providers.arbeitnow import search_arbeitnow
 from app.providers.jsearch import search_jsearch
 from app.providers.jooble import search_jooble
 from app.providers.portal_search import (
+    search_arcs_community,
+    search_healthjobs_uk,
+    search_ifs_uk,
     search_jobs_ch,
+    search_jobs_ac_uk,
     search_jobup_ch,
     search_karriere_at,
+    search_new_scientist_jobs,
+    search_nhs_jobs,
     search_reed_uk,
 )
 from app.providers.remotive import search_remotive
@@ -53,6 +59,12 @@ PROVIDERS: dict[str, Provider] = {
     "jobs_ch": search_jobs_ch,
     "jobup_ch": search_jobup_ch,
     "reed_uk": search_reed_uk,
+    "nhs_jobs": search_nhs_jobs,
+    "healthjobs_uk": search_healthjobs_uk,
+    "jobs_ac_uk": search_jobs_ac_uk,
+    "new_scientist_jobs": search_new_scientist_jobs,
+    "ifs_uk": search_ifs_uk,
+    "arcs_community": search_arcs_community,
 }
 
 SUPPORTED_COUNTRIES = {
@@ -70,6 +82,12 @@ SOURCE_COUNTRIES = {
     "jobs_ch": {"ch"},
     "jobup_ch": {"ch"},
     "reed_uk": {"gb"},
+    "nhs_jobs": {"gb"},
+    "healthjobs_uk": {"gb"},
+    "jobs_ac_uk": {"gb"},
+    "new_scientist_jobs": {"gb"},
+    "ifs_uk": {"gb"},
+    "arcs_community": {"gb"},
 }
 
 
