@@ -25,6 +25,7 @@ class Portal:
     base_url: str
     url_builder: Callable[[str, str], str]
     parser: Callable[[str, "Portal"], list[JobPosting]]
+    country_name: str | None = None
 
 
 def _clean(value: str | None) -> str | None:
@@ -47,6 +48,14 @@ def _absolute_url(portal: Portal, href: str | None) -> str | None:
     if not href:
         return None
     return urljoin(portal.base_url, html.unescape(href))
+
+
+def _portal_location(portal: Portal, location: str | None) -> str | None:
+    if not location:
+        return portal.country_name
+    if portal.country_name and portal.country_name.lower() not in location.lower():
+        return f"{location}, {portal.country_name}"
+    return location
 
 
 def _attr(markup: str, name: str) -> str | None:
@@ -162,10 +171,13 @@ def _parse_karriere(text: str, portal: Portal) -> list[JobPosting]:
             JobPosting(
                 title=_clean(title_link.group(2)) or "",
                 company=_clean(company.group(1)) if company else None,
-                location=", ".join(
-                    item for item in (_clean(location) for location in locations) if item
-                )
-                or None,
+                location=_portal_location(
+                    portal,
+                    ", ".join(
+                        item for item in (_clean(location) for location in locations) if item
+                    )
+                    or None,
+                ),
                 description=description or None,
                 source=portal.source,
                 source_url=_absolute_url(portal, title_link.group(1)),
@@ -188,7 +200,7 @@ def _parse_swiss(text: str, portal: Portal) -> list[JobPosting]:
             JobPosting(
                 title=item.get("title") or "",
                 company=company.get("name"),
-                location=item.get("place"),
+                location=_portal_location(portal, item.get("place")),
                 description=item.get("relativeDate"),
                 source=portal.source,
                 source_url=url,
@@ -209,6 +221,7 @@ def _parse_swiss(text: str, portal: Portal) -> list[JobPosting]:
         results.append(
             JobPosting(
                 title=_clean(match.group(2)) or "",
+                location=_portal_location(portal, None),
                 source=portal.source,
                 source_url=_absolute_url(portal, match.group(1)),
                 apply_url=_absolute_url(portal, match.group(1)),
@@ -226,7 +239,11 @@ def _parse_reed(text: str, portal: Portal) -> list[JobPosting]:
     )
 
     for block in blocks:
-        link = re.search(r'<a[^>]+href="([^"]+)"[^>]*>(.*?)</a>', block, flags=re.DOTALL)
+        link = re.search(
+            r'<a(?=[^>]*data-qa="job-card-title")[^>]*href="([^"]+)"[^>]*>(.*?)</a>',
+            block,
+            flags=re.DOTALL,
+        )
         title = (
             _attr(link.group(0), "title")
             if link
@@ -241,12 +258,12 @@ def _parse_reed(text: str, portal: Portal) -> list[JobPosting]:
             continue
 
         company = re.search(
-            r'data-qa="job-card-company"[^>]*>(.*?)<',
+            r'data-qa="job-posted-by"[^>]*>.*? by <a[^>]*>(.*?)</a>',
             block,
             flags=re.DOTALL,
         )
         location = re.search(
-            r'data-qa="job-card-location"[^>]*>(.*?)<',
+            r'data-qa="job-metadata-location"[^>]*>.*?</svg>(.*?)</li>',
             block,
             flags=re.DOTALL,
         )
@@ -260,12 +277,17 @@ def _parse_reed(text: str, portal: Portal) -> list[JobPosting]:
             JobPosting(
                 title=title,
                 company=_clean(company.group(1)) if company else None,
-                location=_clean(location.group(1)) if location else None,
+                location=_portal_location(
+                    portal,
+                    _clean(location.group(1)) if location else None,
+                ),
                 description=_clean(summary.group(1)) if summary else None,
                 source=portal.source,
                 source_url=_absolute_url(portal, link.group(1)) if link else None,
                 apply_url=_absolute_url(portal, link.group(1)) if link else None,
-                is_remote="remote" in block.lower(),
+                is_remote="remote" in (_clean(location.group(1)) or "").lower()
+                if location
+                else False,
             )
         )
 
@@ -278,24 +300,28 @@ PORTALS = {
         base_url="https://www.karriere.at",
         url_builder=_karriere_url,
         parser=_parse_karriere,
+        country_name="Austria",
     ),
     "jobs_ch": Portal(
         source="Jobs.ch",
         base_url="https://www.jobs.ch",
         url_builder=_swiss_url("www.jobs.ch"),
         parser=_parse_swiss,
+        country_name="Switzerland",
     ),
     "jobup_ch": Portal(
         source="Jobup.ch",
         base_url="https://www.jobup.ch",
         url_builder=_swiss_url("www.jobup.ch", "/en/jobs/"),
         parser=_parse_swiss,
+        country_name="Switzerland",
     ),
     "reed_uk": Portal(
         source="Reed UK",
         base_url="https://www.reed.co.uk",
         url_builder=_reed_url,
         parser=_parse_reed,
+        country_name="United Kingdom",
     ),
 }
 

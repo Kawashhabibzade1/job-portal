@@ -43,6 +43,69 @@ REMOTE_LOCATION_MARKERS = {
     "worldwide",
 }
 
+COUNTRY_LOCATION_MARKERS = {
+    "at": {
+        "austria",
+        "osterreich",
+        "österreich",
+        "vienna",
+        "wien",
+        "graz",
+        "linz",
+        "salzburg",
+        "innsbruck",
+        "klagenfurt",
+    },
+    "ch": {
+        "switzerland",
+        "schweiz",
+        "suisse",
+        "svizzera",
+        "zurich",
+        "zürich",
+        "geneva",
+        "geneve",
+        "genève",
+        "basel",
+        "bern",
+        "lausanne",
+        "lugano",
+    },
+    "de": {
+        "germany",
+        "deutschland",
+        "berlin",
+        "munich",
+        "munchen",
+        "münchen",
+        "hamburg",
+        "frankfurt",
+        "cologne",
+        "koln",
+        "köln",
+        "stuttgart",
+        "dusseldorf",
+        "düsseldorf",
+    },
+    "gb": {
+        "united kingdom",
+        "uk",
+        "great britain",
+        "england",
+        "scotland",
+        "wales",
+        "northern ireland",
+        "london",
+        "manchester",
+        "birmingham",
+        "leeds",
+        "glasgow",
+        "edinburgh",
+        "bristol",
+    },
+    "tr": NORTHERN_CYPRUS_LOCATION_MARKERS,
+}
+
 
 def _normalize(value: str | None) -> str:
     if not value:
@@ -66,6 +129,10 @@ def provider_location_query(location: str) -> str:
 def _is_remote_match(location: str, is_remote: bool | None) -> bool:
     normalized = _normalize(location)
     return bool(is_remote) or any(marker in normalized for marker in REMOTE_LOCATION_MARKERS)
+
+
+def is_remote_job(job: JobPosting) -> bool:
+    return _is_remote_match(job.location or "", job.is_remote)
 
 
 def location_text_matches(
@@ -92,4 +159,40 @@ def filter_jobs_by_location(jobs: list[JobPosting], requested_location: str) -> 
         job
         for job in jobs
         if location_text_matches(job.location, requested_location, job.is_remote)
+    ]
+
+
+def filter_jobs_by_remote(jobs: list[JobPosting], include_remote: bool) -> list[JobPosting]:
+    if include_remote:
+        return jobs
+    return [job for job in jobs if not is_remote_job(job)]
+
+
+def country_text_matches(
+    job_location: str | None,
+    country: str,
+    is_remote: bool | None = None,
+    include_remote: bool = False,
+) -> bool:
+    normalized_location = _normalize(job_location)
+    markers = COUNTRY_LOCATION_MARKERS.get(country.lower(), set())
+    return bool(normalized_location) and any(
+        _normalize(marker) in normalized_location for marker in markers
+    )
+
+
+def filter_jobs_by_countries(
+    jobs: list[JobPosting],
+    countries: list[str],
+    include_remote: bool = False,
+) -> list[JobPosting]:
+    if not countries:
+        return jobs
+    return [
+        job
+        for job in jobs
+        if any(
+            country_text_matches(job.location, country, job.is_remote, include_remote)
+            for country in countries
+        )
     ]

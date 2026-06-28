@@ -18,7 +18,12 @@ from app.providers.portal_search import (
 )
 from app.providers.remotive import search_remotive
 from app.services.deduplicate import deduplicate_jobs
-from app.services.location import filter_jobs_by_location, provider_location_query
+from app.services.location import (
+    filter_jobs_by_countries,
+    filter_jobs_by_location,
+    filter_jobs_by_remote,
+    provider_location_query,
+)
 from app.services.normalize import normalize_jobs
 from app.services.query_expansion import expanded_job_queries, expanded_relevance_terms
 from app.services.relevance import filter_jobs_by_any_term, filter_relevant_jobs
@@ -50,6 +55,22 @@ PROVIDERS: dict[str, Provider] = {
     "reed_uk": search_reed_uk,
 }
 
+SUPPORTED_COUNTRIES = {
+    "at": "Austria",
+    "ch": "Switzerland",
+    "de": "Germany",
+    "gb": "United Kingdom",
+    "tr": "Northern Cyprus",
+}
+
+SOURCE_COUNTRIES = {
+    "arbeitsagentur": {"de"},
+    "karriere_at": {"at"},
+    "jobs_ch": {"ch"},
+    "jobup_ch": {"ch"},
+    "reed_uk": {"gb"},
+}
+
 
 @app.get("/api/health")
 @app.get("/health")
@@ -66,6 +87,36 @@ def _selected_sources(sources: str | None) -> list[str]:
 
 def _source_key(source: str) -> str:
     return source.lower().replace(".", "_").replace("-", "_").replace(" ", "_")
+
+
+def _selected_countries(country: str) -> list[str]:
+    requested = [
+        item.strip().lower()
+        for item in country.split(",")
+        if item.strip() and item.strip().lower() != "all"
+    ]
+    raw_requested = [item.strip().lower() for item in country.split(",") if item.strip()]
+    if not requested or "all" in raw_requested:
+        return list(SUPPORTED_COUNTRIES.keys())
+    return [item for item in requested if item in SUPPORTED_COUNTRIES]
+
+
+def _source_supports_country(source: str, country: str) -> bool:
+    supported = SOURCE_COUNTRIES.get(source)
+    return not supported or country in supported
+
+
+def _provider_location(source: str, location: str, country: str) -> str:
+    if not location.strip() and source in SOURCE_COUNTRIES:
+        return ""
+
+    country_name = SUPPORTED_COUNTRIES.get(country, "")
+    if location.strip():
+        location_query = provider_location_query(location)
+        if country_name and country_name.lower() not in location_query.lower():
+            return f"{location_query}, {country_name}"
+        return location_query
+    return country_name
 
 
 def _run_provider(
@@ -85,33 +136,42 @@ def _run_provider(
 def search_jobs(
     query: str = Query(default="", description="Job title, skill, or company"),
     location: str = Query(default="", description="City, country, or remote"),
-    country: str = Query(default="de", min_length=2, max_length=2),
+    country: str = Query(default="de", description="Country code, all, or comma-separated country codes"),
     sources: str | None = Query(default=None, description="Comma-separated source keys"),
+    include_remote: bool = Query(default=False, description="Include remote jobs"),
 ) -> JobSearchResponse:
     selected_sources = _selected_sources(sources)
+    selected_countries = _selected_countries(country)
     jobs: list[JobPosting] = []
     errors: dict[str, str] = {}
     source_counts: dict[str, int] = {source: 0 for source in selected_sources}
     search_queries = expanded_job_queries(query)
-    search_location = provider_location_query(location)
 
     for source in selected_sources:
-        for search_query in search_queries:
-            try:
-                provider_jobs = _run_provider(
-                    source,
-                    PROVIDERS[source],
-                    query=search_query,
-                    location=search_location,
-                    country=country,
-                )
-                jobs.extend(provider_jobs)
-            except Exception as exc:
-                errors[source] = str(exc)
-                break
+        for search_country in selected_countries:
+            if not _source_supports_country(source, search_country):
+                continue
+            search_location = _provider_location(source, location, search_country)
+            for search_query in search_queries:
+                try:
+                    provider_jobs = _run_provider(
+                        source,
+                        PROVIDERS[source],
+                        query=search_query,
+                        location=search_location,
+                        country=search_country,
+                    )
+                    jobs.extend(provider_jobs)
+                except Exception as exc:
+                    errors[source] = str(exc)
+                    break
 
     normalized = normalize_jobs(jobs)
-    normalized = filter_jobs_by_location(normalized, location)
+    normalized = filter_jobs_by_remote(normalized, include_remote)
+    if location.strip():
+        normalized = filter_jobs_by_location(normalized, location)
+    else:
+        normalized = filter_jobs_by_countries(normalized, selected_countries, include_remote)
     normalized = filter_jobs_by_any_term(normalized, expanded_relevance_terms(query))
     relevance_query = "" if len(search_queries) > 1 else query
     normalized = filter_relevant_jobs(normalized, relevance_query)
@@ -138,5 +198,12 @@ def search_jobs_alias(
     location: str = "",
     country: str = "de",
     sources: str | None = None,
+    include_remote: bool = False,
 ) -> JobSearchResponse:
-    return search_jobs(query=query, location=location, country=country, sources=sources)
+    return search_jobs(
+        query=query,
+        location=location,
+        country=country,
+        sources=sources,
+        include_remote=include_remote,
+    )

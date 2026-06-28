@@ -1,35 +1,35 @@
-import { AlertCircle, Loader2, MapPin, Search } from "lucide-react";
-import { useMemo, useState } from "react";
+import { AlertCircle, Check, Loader2, MapPin, Search } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 
 import { searchJobs } from "../api/jobs.js";
 import JobCard from "../components/JobCard.jsx";
 
 const PROVIDERS = [
-  { key: "arbeitsagentur", label: "Arbeitsagentur" },
-  { key: "arbeitnow", label: "Arbeitnow" },
-  { key: "remotive", label: "Remotive" },
-  { key: "adzuna", label: "Adzuna" },
-  { key: "jsearch", label: "JSearch" },
-  { key: "jooble", label: "Jooble" },
-  { key: "karriere_at", label: "Karriere.at" },
-  { key: "jobs_ch", label: "Jobs.ch" },
-  { key: "jobup_ch", label: "Jobup.ch" },
-  { key: "reed_uk", label: "Reed UK" },
+  { key: "arbeitsagentur", label: "Arbeitsagentur", countries: ["de"] },
+  { key: "arbeitnow", label: "Arbeitnow", countries: ["de", "at", "ch", "gb"] },
+  { key: "remotive", label: "Remotive", countries: ["de", "at", "ch", "gb", "tr"], remoteOnly: true },
+  { key: "adzuna", label: "Adzuna", countries: ["de", "at", "ch", "gb"] },
+  { key: "jsearch", label: "JSearch", countries: ["de", "at", "ch", "gb", "tr"] },
+  { key: "jooble", label: "Jooble", countries: ["de", "at", "ch", "gb", "tr"] },
+  { key: "karriere_at", label: "Karriere.at", countries: ["at"] },
+  { key: "jobs_ch", label: "Jobs.ch", countries: ["ch"] },
+  { key: "jobup_ch", label: "Jobup.ch", countries: ["ch"] },
+  { key: "reed_uk", label: "Reed UK", countries: ["gb"] },
 ];
 
 const COUNTRIES = [
-  { code: "de", label: "Germany", defaultLocation: "Berlin" },
-  { code: "gb", label: "United Kingdom", defaultLocation: "" },
-  { code: "us", label: "United States", defaultLocation: "" },
-  { code: "at", label: "Austria", defaultLocation: "" },
-  { code: "ch", label: "Switzerland", defaultLocation: "" },
-  { code: "tr", label: "Northern Cyprus (TRNC)", defaultLocation: "Northern Cyprus" },
+  { code: "de", label: "Germany" },
+  { code: "at", label: "Austria" },
+  { code: "ch", label: "Switzerland" },
+  { code: "gb", label: "United Kingdom" },
+  { code: "tr", label: "Northern Cyprus" },
 ];
 
 export default function SearchPage() {
   const [query, setQuery] = useState("developer");
-  const [location, setLocation] = useState("Berlin");
-  const [country, setCountry] = useState("de");
+  const [location, setLocation] = useState("");
+  const [selectedCountries, setSelectedCountries] = useState(["de"]);
+  const [includeRemote, setIncludeRemote] = useState(false);
   const [selectedSources, setSelectedSources] = useState(
     PROVIDERS.map((provider) => provider.key),
   );
@@ -45,6 +45,27 @@ export default function SearchPage() {
     }));
   }, [result]);
 
+  const allCountriesSelected = selectedCountries.length === COUNTRIES.length;
+  const countryParam = allCountriesSelected ? "all" : selectedCountries.join(",");
+  const availableProviders = useMemo(
+    () =>
+      PROVIDERS.filter((provider) => {
+        if (provider.remoteOnly && !includeRemote) return false;
+        return provider.countries.some((countryCode) =>
+          selectedCountries.includes(countryCode),
+        );
+      }),
+    [includeRemote, selectedCountries],
+  );
+
+  useEffect(() => {
+    setSelectedSources((current) => {
+      const availableSourceKeys = availableProviders.map((provider) => provider.key);
+      const next = current.filter((source) => availableSourceKeys.includes(source));
+      return next.length ? next : availableSourceKeys;
+    });
+  }, [availableProviders]);
+
   function toggleSource(source) {
     setSelectedSources((current) => {
       if (current.includes(source)) {
@@ -55,17 +76,20 @@ export default function SearchPage() {
     });
   }
 
-  function handleCountryChange(event) {
-    const nextCountry = COUNTRIES.find((item) => item.code === event.target.value);
-    const currentCountry = COUNTRIES.find((item) => item.code === country);
-    setCountry(event.target.value);
+  function toggleCountry(countryCode) {
+    setSelectedCountries((current) => {
+      if (current.includes(countryCode)) {
+        const next = current.filter((item) => item !== countryCode);
+        return next.length ? next : current;
+      }
+      return [...current, countryCode];
+    });
+  }
 
-    if (
-      nextCountry?.defaultLocation &&
-      (!location.trim() || location === currentCountry?.defaultLocation)
-    ) {
-      setLocation(nextCountry.defaultLocation);
-    }
+  function toggleAllCountries() {
+    setSelectedCountries(
+      allCountriesSelected ? [COUNTRIES[0].code] : COUNTRIES.map((item) => item.code),
+    );
   }
 
   async function handleSubmit(event) {
@@ -77,8 +101,9 @@ export default function SearchPage() {
       const data = await searchJobs({
         query,
         location,
-        country,
+        country: countryParam,
         sources: selectedSources,
+        includeRemote,
       });
       setResult(data);
     } catch (err) {
@@ -154,26 +179,59 @@ export default function SearchPage() {
                     value={location}
                     onChange={(event) => setLocation(event.target.value)}
                     className="min-h-11 w-full rounded-lg border border-line bg-white py-2 pl-10 pr-3 text-sm outline-none transition focus:border-ocean focus:ring-2 focus:ring-blue-100"
-                    placeholder="City, country, remote"
+                    placeholder="Optional city"
                   />
                 </span>
               </label>
 
-              <label className="block">
-                <span className="mb-1.5 block text-sm font-medium text-slate-700">
-                  Country
-                </span>
-                <select
-                  value={country}
-                  onChange={handleCountryChange}
-                  className="min-h-11 w-full rounded-lg border border-line bg-white px-3 py-2 text-sm outline-none transition focus:border-ocean focus:ring-2 focus:ring-blue-100"
-                >
-                  {COUNTRIES.map((item) => (
-                    <option key={`${item.code}-${item.label}`} value={item.code}>
-                      {item.label}
-                    </option>
-                  ))}
-                </select>
+              <fieldset>
+                <legend className="mb-2 text-sm font-medium text-slate-700">
+                  Countries
+                </legend>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={toggleAllCountries}
+                    className={`col-span-2 inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border px-3 text-sm font-medium transition ${
+                      allCountriesSelected
+                        ? "border-ocean bg-blue-50 text-ocean"
+                        : "border-line bg-white text-slate-600 hover:border-slate-300"
+                    }`}
+                    aria-pressed={allCountriesSelected}
+                  >
+                    {allCountriesSelected && <Check className="h-4 w-4" aria-hidden="true" />}
+                    All countries
+                  </button>
+                  {COUNTRIES.map((item) => {
+                    const checked = selectedCountries.includes(item.code);
+                    return (
+                      <button
+                        key={item.code}
+                        type="button"
+                        onClick={() => toggleCountry(item.code)}
+                        className={`inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border px-3 text-sm font-medium transition ${
+                          checked
+                            ? "border-ocean bg-blue-50 text-ocean"
+                            : "border-line bg-white text-slate-600 hover:border-slate-300"
+                        }`}
+                        aria-pressed={checked}
+                      >
+                        {checked && <Check className="h-4 w-4" aria-hidden="true" />}
+                        {item.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </fieldset>
+
+              <label className="flex min-h-11 items-center justify-between gap-3 rounded-lg border border-line bg-white px-3 py-2 text-sm text-slate-700">
+                <span className="font-medium">Include remote jobs</span>
+                <input
+                  type="checkbox"
+                  checked={includeRemote}
+                  onChange={(event) => setIncludeRemote(event.target.checked)}
+                  className="h-4 w-4 rounded border-line text-ocean focus:ring-ocean"
+                />
               </label>
 
               <fieldset>
@@ -181,7 +239,7 @@ export default function SearchPage() {
                   Sources
                 </legend>
                 <div className="grid grid-cols-2 gap-2">
-                  {PROVIDERS.map((provider) => {
+                  {availableProviders.map((provider) => {
                     const checked = selectedSources.includes(provider.key);
                     return (
                       <button

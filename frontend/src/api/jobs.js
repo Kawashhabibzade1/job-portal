@@ -5,13 +5,14 @@ const api = axios.create({
   timeout: 30000,
 });
 
-export async function searchJobs({ query, location, country, sources }) {
+export async function searchJobs({ query, location, country, sources, includeRemote }) {
   const response = await api.get("/api/jobs/search", {
     params: {
       query,
       location,
       country,
       sources: sources.join(","),
+      include_remote: includeRemote,
     },
   });
 
