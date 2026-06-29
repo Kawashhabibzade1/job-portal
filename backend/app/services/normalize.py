@@ -44,6 +44,7 @@ def normalize_job(job: JobPosting) -> JobPosting:
     payload["location"] = _compact_text(payload.get("location"))
     payload["description"] = _plain_description(payload.get("description"))
     payload["date_posted"] = _normalize_date(payload.get("date_posted"))
+    payload["sources"] = payload.get("sources") or [payload.get("source")]
 
     remote_text = " ".join(
         value.lower()
@@ -62,4 +63,3 @@ def normalize_job(job: JobPosting) -> JobPosting:
 
 def normalize_jobs(jobs: list[JobPosting]) -> list[JobPosting]:
     return [normalize_job(job) for job in jobs if job.title.strip()]
-

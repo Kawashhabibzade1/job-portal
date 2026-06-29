@@ -169,6 +169,27 @@ def _arcs_url(query: str, location: str) -> str:
     return "https://www.arcscientists.org/jobs-and-training/"
 
 
+def _northcyprus_cv_url(query: str, location: str) -> str:
+    params = {}
+    if query:
+        params["keyword"] = query
+    if location:
+        params["location"] = location
+    suffix = f"?{urlencode(params)}" if params else ""
+    return f"https://northcyprus.cv/jobs/{suffix}"
+
+
+def _iskibris_url(query: str, location: str) -> str:
+    params = {}
+    if query:
+        params["search"] = query
+    return f"https://www.iskibris.com/jobs?{urlencode(params)}" if params else "https://www.iskibris.com/jobs"
+
+
+def _trnc_research_url(query: str, location: str) -> str:
+    return "https://grad.emu.edu.tr/en/fees/research-assistantships-opportunities"
+
+
 def _parse_karriere(text: str, portal: Portal) -> list[JobPosting]:
     results: list[JobPosting] = []
     blocks = re.findall(
@@ -509,6 +530,126 @@ def _parse_ifs(text: str, portal: Portal) -> list[JobPosting]:
     return results[:25]
 
 
+def _parse_northcyprus_cv(text: str, portal: Portal) -> list[JobPosting]:
+    results: list[JobPosting] = []
+    seen: set[str] = set()
+    for match in re.finditer(
+        r'<a[^>]+href="([^"]+)"[^>]*>(.*?)</a>',
+        text,
+        flags=re.DOTALL,
+    ):
+        href = match.group(1)
+        if "/job/" not in href and "/jobs/" not in href:
+            continue
+
+        title_text = _clean(match.group(2))
+        if not title_text or len(title_text) < 12:
+            continue
+        title_lower = title_text.lower()
+        if (
+            title_lower in {"browse jobs", "find jobs now", "search jobs now"}
+            or "quick search" in title_lower
+            or "jobs & listings" in title_lower
+        ):
+            continue
+
+        url = _absolute_url(portal, href)
+        if not url or url in seen:
+            continue
+        seen.add(url)
+
+        parts = [part.strip() for part in title_text.split("|") if part.strip()]
+        title = parts[0]
+        company = parts[1] if len(parts) > 1 else None
+        location = None
+        for candidate in ["Nicosia", "Lefkosa", "Lefkoşa", "Kyrenia", "Girne", "Famagusta", "Gazimağusa", "Iskele", "Güzelyurt", "Lefke"]:
+            if candidate.lower() in title_text.lower():
+                location = candidate
+                break
+
+        results.append(
+            JobPosting(
+                title=title,
+                company=company,
+                location=_portal_location(portal, location),
+                description=_clean(title_text),
+                source=portal.source,
+                source_url=url,
+                apply_url=url,
+                is_remote="remote" in title_text.lower(),
+            )
+        )
+
+    return results[:25]
+
+
+def _research_query_matches(query: str) -> bool:
+    query = query.lower()
+    terms = [
+        "academic",
+        "assistant",
+        "biolog",
+        "biomed",
+        "biotech",
+        "ciu",
+        "embryo",
+        "emu",
+        "fertil",
+        "human ivf",
+        "ivf",
+        "lab",
+        "labor",
+        "lecturer",
+        "medical",
+        "molekular",
+        "neu",
+        "phd",
+        "professor",
+        "research",
+        "university",
+    ]
+    return any(term in query for term in terms)
+
+
+def _parse_trnc_research_portals(text: str, portal: Portal) -> list[JobPosting]:
+    description = (
+        "Research and academic application portal for Northern Cyprus. "
+        "Relevant for university, laboratory, biomedical, IVF, graduate, and research assistant searches."
+    )
+    return [
+        JobPosting(
+            title="Research Assistantship Opportunities",
+            company="Eastern Mediterranean University",
+            location="Famagusta, Northern Cyprus",
+            description=description,
+            source=portal.source,
+            source_url="https://grad.emu.edu.tr/en/fees/research-assistantships-opportunities",
+            apply_url="https://grad.emu.edu.tr/en/fees/research-assistantships-opportunities",
+            is_remote=False,
+        ),
+        JobPosting(
+            title="Academic and Research Career Opportunities",
+            company="Near East University",
+            location="Nicosia, Northern Cyprus",
+            description=description,
+            source=portal.source,
+            source_url="https://neu.edu.tr/career/career-opportunities/?lang=en",
+            apply_url="https://neu.edu.tr/career/career-opportunities/?lang=en",
+            is_remote=False,
+        ),
+        JobPosting(
+            title="Academic and Administrative Open Positions",
+            company="Cyprus International University",
+            location="Nicosia, Northern Cyprus",
+            description=description,
+            source=portal.source,
+            source_url="https://ciu.edu.tr/en/careers",
+            apply_url="https://intranet.ciu.edu.tr/hr/career-apply",
+            is_remote=False,
+        ),
+    ]
+
+
 def _parse_closed_or_blocked(text: str, portal: Portal) -> list[JobPosting]:
     if "has now closed" in text.lower():
         return []
@@ -586,6 +727,27 @@ PORTALS = {
         parser=_parse_arcs,
         country_name="United Kingdom",
     ),
+    "northcyprus_cv": Portal(
+        source="NorthCyprus.cv",
+        base_url="https://northcyprus.cv",
+        url_builder=_northcyprus_cv_url,
+        parser=_parse_northcyprus_cv,
+        country_name="Northern Cyprus",
+    ),
+    "iskibris": Portal(
+        source="İş Kıbrıs",
+        base_url="https://www.iskibris.com",
+        url_builder=_iskibris_url,
+        parser=_parse_closed_or_blocked,
+        country_name="Northern Cyprus",
+    ),
+    "trnc_research": Portal(
+        source="TRNC Research Portals",
+        base_url="https://grad.emu.edu.tr",
+        url_builder=_trnc_research_url,
+        parser=_parse_trnc_research_portals,
+        country_name="Northern Cyprus",
+    ),
 }
 
 
@@ -593,6 +755,8 @@ def search_portal(portal_key: str, query: str, location: str = "") -> list[JobPo
     portal = PORTALS[portal_key]
     if not query.strip():
         query = "jobs"
+    if portal_key == "trnc_research" and not _research_query_matches(query):
+        return []
     try:
         html_text = _fetch(portal.url_builder(query, location))
     except requests.HTTPError as exc:
@@ -605,7 +769,7 @@ def search_portal(portal_key: str, query: str, location: str = "") -> list[JobPo
     tagged_jobs: list[JobPosting] = []
     for job in jobs:
         description = job.description or ""
-        if query.lower() not in " ".join(
+        if portal_key not in {"northcyprus_cv", "iskibris"} and query.lower() not in " ".join(
             value.lower()
             for value in [job.title, job.company, job.location, description]
             if value
@@ -657,3 +821,15 @@ def search_ifs_uk(query: str, location: str = "") -> list[JobPosting]:
 
 def search_arcs_community(query: str, location: str = "") -> list[JobPosting]:
     return search_portal("arcs_community", query, location)
+
+
+def search_northcyprus_cv(query: str, location: str = "") -> list[JobPosting]:
+    return search_portal("northcyprus_cv", query, location)
+
+
+def search_iskibris(query: str, location: str = "") -> list[JobPosting]:
+    return search_portal("iskibris", query, location)
+
+
+def search_trnc_research(query: str, location: str = "") -> list[JobPosting]:
+    return search_portal("trnc_research", query, location)

@@ -40,6 +40,8 @@ def expanded_job_queries(query: str) -> list[str]:
 
     if (
         normalized in {"ivf", "ifv"}
+        or "ivf" in normalized
+        or "ifv" in normalized
         or "ivf lab" in normalized
         or "ifv lab" in normalized
         or compact.startswith("ivflab")

@@ -31,8 +31,9 @@ function formatSalary(job) {
 
 export default function JobCard({ job }) {
   const postedAt = formatDate(job.date_posted);
-  const salary = formatSalary(job);
+  const salary = job.salary_text || formatSalary(job);
   const link = job.apply_url || job.source_url;
+  const sources = job.sources?.length ? job.sources : [job.source].filter(Boolean);
 
   return (
     <article className="rounded-lg border border-line bg-panel p-4 shadow-sm transition hover:border-slate-300 hover:shadow-md">
@@ -86,9 +87,16 @@ export default function JobCard({ job }) {
         </div>
 
         <div className="flex shrink-0 items-center justify-between gap-3 md:flex-col md:items-end">
-          <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-semibold uppercase tracking-wide text-slate-600">
-            {job.source}
-          </span>
+          <div className="flex flex-wrap justify-end gap-1.5">
+            {sources.map((source) => (
+              <span
+                key={source}
+                className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-semibold uppercase tracking-wide text-slate-600"
+              >
+                {source}
+              </span>
+            ))}
+          </div>
           {link && (
             <a
               href={link}
@@ -105,4 +113,3 @@ export default function JobCard({ job }) {
     </article>
   );
 }
-

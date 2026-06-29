@@ -32,6 +32,10 @@ class Settings:
     jsearch_api_key: str | None
     jooble_api_key: str | None
     cors_origins: list[str]
+    scraper_timeout_ms: int
+    scraper_max_retries: int
+    cache_duration_ms: int
+    vercel_deployment: bool
 
 
 @lru_cache
@@ -47,6 +51,10 @@ def get_settings() -> Settings:
                 "http://localhost:5173,http://127.0.0.1:5173",
             )
         ),
+        scraper_timeout_ms=int(os.getenv("SCRAPER_TIMEOUT", "30000")),
+        scraper_max_retries=int(os.getenv("SCRAPER_MAX_RETRIES", "3")),
+        cache_duration_ms=int(os.getenv("CACHE_DURATION", "3600000")),
+        vercel_deployment=os.getenv("VERCEL_DEPLOYMENT", "false").lower() == "true",
     )
 
 
