@@ -1,11 +1,15 @@
 import axios from "axios";
 
+const LOCAL_BACKEND_URL = "http://127.0.0.1:8000";
+
+function isLocalHost() {
+  if (typeof window === "undefined") return false;
+  return ["localhost", "127.0.0.1", "::1", "[::1]"].includes(window.location.hostname);
+}
+
 function defaultApiBaseUrl() {
   if (import.meta.env.VITE_API_BASE_URL) return import.meta.env.VITE_API_BASE_URL;
-  if (typeof window === "undefined") return "";
-  return ["localhost", "127.0.0.1"].includes(window.location.hostname)
-    ? "http://127.0.0.1:8000"
-    : "";
+  return isLocalHost() ? LOCAL_BACKEND_URL : "";
 }
 
 const API_BASE_URL = defaultApiBaseUrl();
@@ -17,6 +21,26 @@ const api = axios.create({
 
 function apiUrl(path) {
   return `${API_BASE_URL.replace(/\/$/, "")}${path}`;
+}
+
+function localApiUrl(path) {
+  return `${LOCAL_BACKEND_URL}${path}`;
+}
+
+function shouldRetryLocal(status) {
+  return isLocalHost() && [404, 405, 502, 503, 504].includes(status);
+}
+
+async function postWithLocalFallback(path, payload) {
+  try {
+    const response = await api.post(path, payload);
+    return response.data;
+  } catch (error) {
+    const status = error.response?.status;
+    if (!shouldRetryLocal(status) || API_BASE_URL === LOCAL_BACKEND_URL) throw error;
+    const response = await axios.post(localApiUrl(path), payload, { timeout: 30000 });
+    return response.data;
+  }
 }
 
 export async function searchJobs({
@@ -42,13 +66,12 @@ export async function searchJobs({
 }
 
 export async function sendChatMessage({ message, conversationId, attachments = [], context = {} }) {
-  const response = await api.post("/api/chat", {
+  return postWithLocalFallback("/api/jobs/chat", {
     message,
     conversation_id: conversationId,
     attachments,
     context,
   });
-  return response.data;
 }
 
 export async function getLlmStatus() {
@@ -68,22 +91,40 @@ export async function streamChatMessage({
   context = {},
   onEvent,
 }) {
-  const response = await fetch(apiUrl("/api/chat/stream"), {
+  const payload = {
+    message,
+    conversation_id: conversationId,
+    attachments,
+    context,
+  };
+  let response = await fetch(apiUrl("/api/jobs/chat/stream"), {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       Accept: "text/event-stream",
     },
-    body: JSON.stringify({
-      message,
-      conversation_id: conversationId,
-      attachments,
-      context,
-    }),
+    body: JSON.stringify(payload),
   });
 
+  if (!response.ok && shouldRetryLocal(response.status) && API_BASE_URL !== LOCAL_BACKEND_URL) {
+    response = await fetch(localApiUrl("/api/jobs/chat/stream"), {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "text/event-stream",
+      },
+      body: JSON.stringify(payload),
+    });
+  }
+
   if (!response.ok) {
-    const error = new Error(`Live chat failed with status ${response.status}`);
+    let detail = "";
+    try {
+      detail = await response.text();
+    } catch {
+      detail = "";
+    }
+    const error = new Error(detail || `Live chat failed with status ${response.status}`);
     error.fallbackable = response.status === 404 || response.status === 405;
     throw error;
   }

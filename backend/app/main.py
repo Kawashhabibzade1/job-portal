@@ -490,6 +490,7 @@ def _internal_search(
     )
 
 
+@app.post("/api/jobs/chat", response_model=ChatResponse)
 @app.post("/api/chat", response_model=ChatResponse)
 def chat_endpoint(payload: ChatRequest) -> ChatResponse:
     return handle_chat(payload, _internal_search)
@@ -527,6 +528,7 @@ def _text_chunks(text: str):
         yield chunk
 
 
+@app.post("/api/jobs/chat/stream")
 @app.post("/api/chat/stream")
 def chat_stream_endpoint(payload: ChatRequest) -> StreamingResponse:
     conversation_id = payload.conversation_id or str(uuid4())
