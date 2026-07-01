@@ -13,6 +13,7 @@ function defaultApiBaseUrl() {
 }
 
 const API_BASE_URL = defaultApiBaseUrl();
+const USE_GET_CHAT = !isLocalHost();
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -43,6 +44,13 @@ async function postWithLocalFallback(path, payload) {
   }
 }
 
+function chatQuery({ message, conversationId }) {
+  const params = new URLSearchParams();
+  params.set("message", message);
+  if (conversationId) params.set("conversation_id", conversationId);
+  return params.toString();
+}
+
 export async function searchJobs({
   query,
   location,
@@ -66,6 +74,10 @@ export async function searchJobs({
 }
 
 export async function sendChatMessage({ message, conversationId, attachments = [], context = {} }) {
+  if (USE_GET_CHAT) {
+    const response = await api.get(`/api/jobs/chat?${chatQuery({ message, conversationId })}`);
+    return response.data;
+  }
   return postWithLocalFallback("/api/jobs/chat", {
     message,
     conversation_id: conversationId,
@@ -97,7 +109,13 @@ export async function streamChatMessage({
     attachments,
     context,
   };
-  let response = await fetch(apiUrl("/api/jobs/chat/stream"), {
+  const streamPath = USE_GET_CHAT
+    ? `/api/jobs/chat/stream?${chatQuery({ message, conversationId })}`
+    : "/api/jobs/chat/stream";
+  let response = await fetch(apiUrl(streamPath), USE_GET_CHAT ? {
+    method: "GET",
+    headers: { Accept: "text/event-stream" },
+  } : {
     method: "POST",
     headers: {
       "Content-Type": "application/json",

@@ -496,6 +496,14 @@ def chat_endpoint(payload: ChatRequest) -> ChatResponse:
     return handle_chat(payload, _internal_search)
 
 
+@app.get("/api/jobs/chat", response_model=ChatResponse)
+def chat_get_endpoint(
+    message: str = Query(..., description="Chat message"),
+    conversation_id: str | None = Query(default=None),
+) -> ChatResponse:
+    return chat_endpoint(ChatRequest(message=message, conversation_id=conversation_id))
+
+
 CHAT_STREAM_STATUSES = {
     "search": "Searching live job sources...",
     "match": "Ranking jobs against your profile...",
@@ -578,6 +586,14 @@ def chat_stream_endpoint(payload: ChatRequest) -> StreamingResponse:
             "X-Accel-Buffering": "no",
         },
     )
+
+
+@app.get("/api/jobs/chat/stream")
+def chat_stream_get_endpoint(
+    message: str = Query(..., description="Chat message"),
+    conversation_id: str | None = Query(default=None),
+) -> StreamingResponse:
+    return chat_stream_endpoint(ChatRequest(message=message, conversation_id=conversation_id))
 
 
 @app.post("/api/documents/upload", response_model=UploadedDocument)
