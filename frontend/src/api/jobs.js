@@ -1,13 +1,22 @@
 import axios from "axios";
 
+function defaultApiBaseUrl() {
+  if (import.meta.env.VITE_API_BASE_URL) return import.meta.env.VITE_API_BASE_URL;
+  if (typeof window === "undefined") return "";
+  return ["localhost", "127.0.0.1"].includes(window.location.hostname)
+    ? "http://127.0.0.1:8000"
+    : "";
+}
+
+const API_BASE_URL = defaultApiBaseUrl();
+
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || "",
+  baseURL: API_BASE_URL,
   timeout: 30000,
 });
 
 function apiUrl(path) {
-  const base = import.meta.env.VITE_API_BASE_URL || "";
-  return `${base.replace(/\/$/, "")}${path}`;
+  return `${API_BASE_URL.replace(/\/$/, "")}${path}`;
 }
 
 export async function searchJobs({
