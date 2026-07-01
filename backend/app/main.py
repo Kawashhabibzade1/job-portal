@@ -163,6 +163,33 @@ app.add_middleware(
 )
 
 
+STRIPPED_API_PREFIXES = (
+    "/agents",
+    "/applications",
+    "/apply",
+    "/chat",
+    "/cv",
+    "/documents",
+    "/feedback",
+    "/interview",
+    "/jobs",
+    "/llm",
+    "/pdf",
+    "/profile",
+    "/roadmap",
+)
+
+
+@app.middleware("http")
+async def restore_stripped_api_prefix(request: Request, call_next):
+    path = request.scope.get("path", "")
+    if not path.startswith("/api/") and any(
+        path == prefix or path.startswith(f"{prefix}/") for prefix in STRIPPED_API_PREFIXES
+    ):
+        request.scope["path"] = f"/api{path}"
+    return await call_next(request)
+
+
 PROVIDERS: dict[str, Provider] = {
     "arbeitsagentur": search_arbeitsagentur,
     "arbeitnow": search_arbeitnow,
