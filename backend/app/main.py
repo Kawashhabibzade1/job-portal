@@ -254,11 +254,13 @@ def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
+@app.get("/llm/status")
 @app.get("/api/llm/status")
 def llm_status_endpoint() -> dict[str, object]:
     return LlmAdapter().status()
 
 
+@app.put("/llm/settings")
 @app.put("/api/llm/settings")
 def llm_settings_endpoint(payload: dict[str, str] = Body(default_factory=dict)) -> dict[str, object]:
     save_runtime_environment(payload)
