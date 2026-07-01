@@ -517,12 +517,16 @@ def _internal_search(
     )
 
 
+@app.post("/jobs/chat", response_model=ChatResponse)
+@app.post("/chat", response_model=ChatResponse)
 @app.post("/api/jobs/chat", response_model=ChatResponse)
 @app.post("/api/chat", response_model=ChatResponse)
 def chat_endpoint(payload: ChatRequest) -> ChatResponse:
     return handle_chat(payload, _internal_search)
 
 
+@app.get("/jobs/chat", response_model=ChatResponse)
+@app.get("/chat", response_model=ChatResponse)
 @app.get("/api/jobs/chat", response_model=ChatResponse)
 def chat_get_endpoint(
     message: str = Query(..., description="Chat message"),
@@ -563,6 +567,8 @@ def _text_chunks(text: str):
         yield chunk
 
 
+@app.post("/jobs/chat/stream")
+@app.post("/chat/stream")
 @app.post("/api/jobs/chat/stream")
 @app.post("/api/chat/stream")
 def chat_stream_endpoint(payload: ChatRequest) -> StreamingResponse:
@@ -615,6 +621,8 @@ def chat_stream_endpoint(payload: ChatRequest) -> StreamingResponse:
     )
 
 
+@app.get("/jobs/chat/stream")
+@app.get("/chat/stream")
 @app.get("/api/jobs/chat/stream")
 def chat_stream_get_endpoint(
     message: str = Query(..., description="Chat message"),
@@ -628,6 +636,7 @@ async def upload_document(file: UploadFile = File(...)) -> UploadedDocument:
     return await store_upload(file)
 
 
+@app.get("/documents", response_model=list[UploadedDocument])
 @app.get("/api/documents", response_model=list[UploadedDocument])
 def documents_endpoint() -> list[UploadedDocument]:
     return list_documents()
@@ -641,6 +650,7 @@ def update_document_endpoint(document_id: str, payload: DocumentUpdate) -> Uploa
     return document
 
 
+@app.get("/profile", response_model=UserProfile)
 @app.get("/api/profile", response_model=UserProfile)
 def profile_endpoint() -> UserProfile:
     return get_profile()
@@ -651,6 +661,7 @@ def update_profile_endpoint(payload: ProfileUpdate) -> UserProfile:
     return update_profile(payload)
 
 
+@app.post("/jobs/match", response_model=JobMatchResponse)
 @app.post("/api/jobs/match", response_model=JobMatchResponse)
 def match_jobs_endpoint(payload: JobMatchRequest) -> JobMatchResponse:
     jobs = payload.jobs
