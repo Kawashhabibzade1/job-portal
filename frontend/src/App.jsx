@@ -2,6 +2,7 @@ import {
   BriefcaseBusiness,
   Check,
   CheckCircle2,
+  Clock3,
   FileText,
   FolderKanban,
   Loader2,
@@ -12,6 +13,7 @@ import {
   Search,
   Send,
   Sparkles,
+  Trash2,
   Upload,
   UserRound,
   Menu,
@@ -107,32 +109,60 @@ function newMessageId(role) {
   return `${role}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
+const SAVED_SEARCHES_KEY = "jobPortal.savedSearches.v1";
+const MAX_SAVED_SEARCHES = 8;
+
+function searchKey({ query, location, country, sources, includeRemote }) {
+  return [
+    query || "",
+    location || "",
+    country || "",
+    Array.isArray(sources) ? sources.join(",") : sources || "",
+    includeRemote ? "remote" : "onsite",
+  ].join("|").toLowerCase();
+}
+
+function searchLabel({ query, location }) {
+  const role = (query || "All jobs").trim();
+  const place = (location || "any location").trim();
+  return `${role} in ${place}`;
+}
+
+function readSavedSearches() {
+  try {
+    return JSON.parse(window.localStorage.getItem(SAVED_SEARCHES_KEY) || "[]");
+  } catch {
+    return [];
+  }
+}
+
+function writeSavedSearches(searches) {
+  window.localStorage.setItem(SAVED_SEARCHES_KEY, JSON.stringify(searches));
+}
+
 /* === Logo SVG === */
 function Logo({ className = "h-8 w-8" }) {
   return (
     <svg viewBox="0 0 64 64" className={className} aria-hidden="true">
       <defs>
         <linearGradient id="logoGrad" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" stopColor="#6366f1" />
-          <stop offset="50%" stopColor="#8b5cf6" />
-          <stop offset="100%" stopColor="#06b6d4" />
+          <stop offset="0%" stopColor="#2563eb" />
+          <stop offset="100%" stopColor="#0891b2" />
         </linearGradient>
       </defs>
-      <rect width="64" height="64" rx="14" fill="#0f172a" />
+      <rect width="64" height="64" rx="14" fill="#ffffff" stroke="#dbe3ea" />
       <circle cx="32" cy="26" r="10" fill="url(#logoGrad)" opacity="0.9" />
       <path d="M22 40c0-5.5 4.5-10 10-10s10 4.5 10 10" fill="none" stroke="url(#logoGrad)" strokeWidth="3.5" strokeLinecap="round" />
-      <path d="M26 50h12" stroke="#06b6d4" strokeWidth="2.5" strokeLinecap="round" />
+      <path d="M26 50h12" stroke="#0891b2" strokeWidth="2.5" strokeLinecap="round" />
     </svg>
   );
 }
 
-/* === Floating background orbs === */
-function BackgroundOrbs() {
+/* === Subtle professional page wash === */
+function BackgroundWash() {
   return (
     <div className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
-      <div className="orb orb-1 animate-float-slow" />
-      <div className="orb orb-2 animate-float-medium" />
-      <div className="orb orb-3 animate-float-fast" />
+      <div className="background-wash" />
     </div>
   );
 }
@@ -205,6 +235,7 @@ export default function App() {
   const [selectedSources, setSelectedSources] = useState(
     PROVIDERS.filter((p) => p.countries.includes("de")).map((p) => p.key),
   );
+  const [savedSearches, setSavedSearches] = useState([]);
   const [mobileChat, setMobileChat] = useState(false);
 
   const contextJobs = useMemo(() => {
@@ -218,7 +249,10 @@ export default function App() {
     [selectedCountries],
   );
 
-  useEffect(() => { refreshWorkspace(); }, []);
+  useEffect(() => {
+    refreshWorkspace();
+    setSavedSearches(readSavedSearches());
+  }, []);
 
   useEffect(() => {
     setSelectedSources((current) => {
@@ -249,7 +283,17 @@ export default function App() {
   function applyChatResponse(response) {
     setConversationId(response.conversation_id);
     const searchPayload = actionPayload(response, "job_search");
-    if (searchPayload?.result) { setResult(searchPayload.result); setActiveView("jobs"); }
+    if (searchPayload?.result) {
+      setResult(searchPayload.result);
+      saveSearchResult(searchPayload.result, {
+        query: searchPayload.result.query || "",
+        location: searchPayload.result.location || "",
+        country: searchPayload.result.country || "all",
+        sources: [],
+        includeRemote: true,
+      });
+      setActiveView("jobs");
+    }
     const matchPayload = actionPayload(response, "job_match");
     if (matchPayload?.matches) { setMatches(matchPayload.matches); setActiveView("jobs"); }
     const letterPayload = actionPayload(response, "cover_letter");
@@ -328,6 +372,60 @@ export default function App() {
     event.preventDefault(); setError("");
     const data = await searchJobs({ query: manualSearch.query, location: manualSearch.location, country: countryParam, sources: selectedSources, includeRemote: manualSearch.includeRemote });
     setResult(data); setMatches([]); setActiveView("jobs");
+    saveSearchResult(data, {
+      query: manualSearch.query,
+      location: manualSearch.location,
+      country: countryParam,
+      sources: selectedSources,
+      includeRemote: manualSearch.includeRemote,
+    });
+  }
+
+  function saveSearchResult(data, descriptor) {
+    if (!data?.jobs?.length) return;
+    const savedSearch = {
+      key: searchKey(descriptor),
+      label: searchLabel(descriptor),
+      query: descriptor.query || "",
+      location: descriptor.location || "",
+      country: descriptor.country || "all",
+      sources: descriptor.sources || [],
+      includeRemote: Boolean(descriptor.includeRemote),
+      count: data.count || data.jobs.length,
+      savedAt: new Date().toISOString(),
+      result: data,
+    };
+    setSavedSearches((current) => {
+      const next = [savedSearch, ...current.filter((item) => item.key !== savedSearch.key)].slice(0, MAX_SAVED_SEARCHES);
+      writeSavedSearches(next);
+      return next;
+    });
+  }
+
+  function loadSavedSearch(savedSearch) {
+    setManualSearch({
+      query: savedSearch.query || "",
+      location: savedSearch.location || "",
+      includeRemote: Boolean(savedSearch.includeRemote),
+    });
+    setSelectedCountries(
+      savedSearch.country === "all"
+        ? COUNTRIES.map((item) => item.code)
+        : String(savedSearch.country || "de").split(",").filter(Boolean),
+    );
+    if (savedSearch.sources?.length) setSelectedSources(savedSearch.sources);
+    setResult(savedSearch.result);
+    setMatches([]);
+    setSelectedJob(null);
+    setActiveView("jobs");
+  }
+
+  function removeSavedSearch(key) {
+    setSavedSearches((current) => {
+      const next = current.filter((item) => item.key !== key);
+      writeSavedSearches(next);
+      return next;
+    });
   }
 
   async function rankCurrentJobs() {
@@ -450,7 +548,7 @@ export default function App() {
 
   return (
     <main className="relative min-h-screen bg-navy-950 text-ink">
-      <BackgroundOrbs />
+      <BackgroundWash />
 
       {/* === HEADER === */}
       <header className="glass sticky top-0 z-30 border-b border-line">
@@ -485,10 +583,16 @@ export default function App() {
         </div>
       </header>
 
-      <div className="mx-auto grid max-w-7xl gap-4 px-4 py-4 sm:px-6 lg:grid-cols-[380px_1fr]">
+      <div className="mx-auto grid max-w-7xl items-start gap-4 px-4 py-4 sm:px-6 lg:grid-cols-[380px_1fr]">
 
         {/* === SIDEBAR (Chat) === */}
-        <aside className={`${mobileChat ? "fixed inset-x-0 bottom-0 z-40 max-h-[75vh] rounded-t-2xl shadow-2xl" : "hidden lg:flex"} glass flex min-h-[calc(100vh-80px)] flex-col rounded-xl`}>
+        <aside
+          className={`${
+            mobileChat
+              ? "fixed inset-x-0 bottom-0 z-40 max-h-[75vh] rounded-t-2xl shadow-2xl"
+              : "hidden lg:sticky lg:top-20 lg:flex lg:h-[calc(100vh-96px)] lg:min-h-0 lg:self-start"
+          } glass flex flex-col overflow-hidden rounded-xl`}
+        >
           {/* Tab bar */}
           <div className="border-b border-line p-3">
             <div className="grid grid-cols-5 gap-1">
@@ -517,7 +621,7 @@ export default function App() {
           </div>
 
           {/* Messages */}
-          <div className="stagger flex-1 space-y-3 overflow-y-auto p-3">
+          <div className="stagger min-h-0 flex-1 space-y-3 overflow-y-auto p-3">
             {messages.map((message, index) => (
               <div
                 key={message.id || `${message.role}-${index}`}
@@ -597,7 +701,7 @@ export default function App() {
         </aside>
 
         {/* === MAIN CONTENT === */}
-        <section className="view-enter space-y-4" key={activeView}>
+        <section className="view-enter min-w-0 space-y-4" key={activeView}>
 
           {toolOutput && activeView !== "documents" && (
             <div className="glass rounded-xl p-4">
@@ -691,6 +795,41 @@ export default function App() {
                     className="h-4 w-4 rounded border-line accent-ocean" />
                 </label>
               </form>
+
+              <div className="glass rounded-xl p-4">
+                <div className="flex min-h-10 flex-wrap items-center justify-between gap-3">
+                  <h2 className="text-lg font-semibold text-ink">Saved searches</h2>
+                  <span className="chip chip-active">{savedSearches.length} saved</span>
+                </div>
+                {savedSearches.length === 0 ? (
+                  <div className="mt-3 rounded-xl border border-dashed border-line p-5 text-center text-sm text-ink-faint">
+                    Saved searches will appear here after a search returns jobs.
+                  </div>
+                ) : (
+                  <div className="mt-3 grid gap-3 md:grid-cols-2">
+                    {savedSearches.map((item) => (
+                      <div key={item.key} className="glass-light rounded-xl p-3">
+                        <div className="flex items-start justify-between gap-3">
+                          <button type="button" onClick={() => loadSavedSearch(item)} className="min-w-0 flex-1 text-left">
+                            <span className="block truncate text-sm font-semibold text-ink">{item.label}</span>
+                            <span className="mt-1 flex items-center gap-1 text-xs text-ink-faint">
+                              <Clock3 className="h-3.5 w-3.5" /> {item.count || item.result?.count || 0} jobs
+                            </span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => removeSavedSearch(item.key)}
+                            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-ink-faint transition hover:bg-rose/10 hover:text-rose"
+                            aria-label={`Remove ${item.label}`}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
 
               {matches.length > 0 && (
                 <div className="glass rounded-xl p-4">

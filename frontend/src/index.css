@@ -3,8 +3,8 @@
 @tailwind utilities;
 
 :root {
-  color: #e2e8f0;
-  background: #020617;
+  color: #172026;
+  background: #f6f8fb;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -19,7 +19,8 @@ body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
-  background: #020617;
+  background:
+    linear-gradient(180deg, #f6f8fb 0%, #eef2f7 100%);
 }
 
 button,
@@ -38,97 +39,52 @@ textarea {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(148, 163, 184, 0.2);
+  background: rgba(82, 97, 115, 0.24);
   border-radius: 3px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(148, 163, 184, 0.35);
+  background: rgba(82, 97, 115, 0.38);
 }
 
-/* === Glass Card === */
+/* === Professional Surfaces === */
 .glass {
-  background: rgba(15, 23, 42, 0.65);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(148, 163, 184, 0.12);
+  background: rgba(255, 255, 255, 0.9);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(82, 97, 115, 0.14);
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
 }
 
 .glass-light {
-  background: rgba(30, 41, 59, 0.5);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(148, 163, 184, 0.1);
+  background: rgba(248, 250, 252, 0.92);
+  border: 1px solid rgba(82, 97, 115, 0.12);
+  box-shadow: 0 2px 12px rgba(15, 23, 42, 0.04);
 }
 
 .glass-input {
-  background: rgba(30, 41, 59, 0.6);
-  border: 1px solid rgba(148, 163, 184, 0.15);
-  color: #e2e8f0;
+  background: #ffffff;
+  border: 1px solid rgba(82, 97, 115, 0.18);
+  color: #172026;
   transition: border-color 0.2s, box-shadow 0.2s;
 }
 
 .glass-input::placeholder {
-  color: #64748b;
+  color: #7a8797;
 }
 
 .glass-input:focus {
-  border-color: #6366f1;
-  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
   outline: none;
 }
 
-/* === Floating Orbs (Higgsfield-style background) === */
-.orb {
+/* === Background Wash === */
+.background-wash {
   position: absolute;
-  border-radius: 50%;
-  filter: blur(100px);
-  pointer-events: none;
-  will-change: transform;
-  opacity: 0.85;
-}
-
-.orb-1 {
-  width: 600px;
-  height: 600px;
-  background: radial-gradient(circle, rgba(99, 102, 241, 0.35), transparent 70%);
-  top: -15%;
-  left: -10%;
-  animation: float-slow 25s ease-in-out infinite;
-}
-
-.orb-2 {
-  width: 500px;
-  height: 500px;
-  background: radial-gradient(circle, rgba(6, 182, 212, 0.3), transparent 70%);
-  top: 30%;
-  right: -10%;
-  animation: float-medium 18s ease-in-out infinite reverse;
-}
-
-.orb-3 {
-  width: 450px;
-  height: 450px;
-  background: radial-gradient(circle, rgba(139, 92, 246, 0.25), transparent 70%);
-  bottom: -10%;
-  left: 20%;
-  animation: float-fast 12s ease-in-out infinite;
-}
-
-@keyframes float-slow {
-  0%, 100% { transform: translate(0, 0) scale(1); }
-  33% { transform: translate(70px, -90px) scale(1.1); }
-  66% { transform: translate(-50px, 40px) scale(0.9); }
-}
-
-@keyframes float-medium {
-  0%, 100% { transform: translate(0, 0) scale(1); }
-  50% { transform: translate(-80px, 60px) scale(1.15); }
-}
-
-@keyframes float-fast {
-  0%, 100% { transform: translate(0, 0) scale(1); }
-  25% { transform: translate(40px, -40px) scale(1.05); }
-  75% { transform: translate(-30px, 30px) scale(0.95); }
+  inset: 0;
+  width: 100%;
+  height: 280px;
+  background: linear-gradient(180deg, rgba(37, 99, 235, 0.07), transparent);
 }
 
 /* === Staggered fade in === */
@@ -159,7 +115,7 @@ textarea {
   height: 1rem;
   margin-left: 0.15rem;
   vertical-align: -0.15rem;
-  background: linear-gradient(135deg, #6366f1, #06b6d4);
+  background: linear-gradient(135deg, #2563eb, #0891b2);
   border-radius: 1px;
   animation: chat-caret 1s steps(1, end) infinite;
 }
@@ -179,7 +135,7 @@ textarea {
 
 /* === Gradient text === */
 .text-gradient {
-  background: linear-gradient(135deg, #6366f1, #8b5cf6, #06b6d4);
+  background: linear-gradient(135deg, #1d4ed8, #0891b2);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -191,8 +147,8 @@ textarea {
   transition: all 0.3s ease;
 }
 .glow-border:hover {
-  border-color: rgba(99, 102, 241, 0.4);
-  box-shadow: 0 0 20px rgba(99, 102, 241, 0.08), 0 4px 16px rgba(0, 0, 0, 0.3);
+  border-color: rgba(37, 99, 235, 0.28);
+  box-shadow: 0 14px 30px rgba(15, 23, 42, 0.08);
   transform: translateY(-1px);
 }
 
@@ -207,15 +163,15 @@ textarea {
   font-size: 0.875rem;
   font-weight: 600;
   color: #fff;
-  background: linear-gradient(135deg, #6366f1, #7c3aed);
+  background: linear-gradient(135deg, #2563eb, #0891b2);
   border: none;
   border-radius: 0.75rem;
   cursor: pointer;
   transition: all 0.2s ease;
 }
 .btn-primary:hover {
-  background: linear-gradient(135deg, #818cf8, #8b5cf6);
-  box-shadow: 0 4px 20px rgba(99, 102, 241, 0.3);
+  background: linear-gradient(135deg, #1d4ed8, #0e7490);
+  box-shadow: 0 8px 22px rgba(37, 99, 235, 0.2);
   transform: translateY(-1px);
 }
 .btn-primary:disabled {
@@ -234,16 +190,16 @@ textarea {
   padding: 0 1rem;
   font-size: 0.875rem;
   font-weight: 600;
-  color: #e2e8f0;
-  background: rgba(30, 41, 59, 0.6);
-  border: 1px solid rgba(148, 163, 184, 0.15);
+  color: #172026;
+  background: #ffffff;
+  border: 1px solid rgba(82, 97, 115, 0.18);
   border-radius: 0.75rem;
   cursor: pointer;
   transition: all 0.2s ease;
 }
 .btn-secondary:hover {
-  background: rgba(30, 41, 59, 0.8);
-  border-color: rgba(148, 163, 184, 0.3);
+  background: #f8fafc;
+  border-color: rgba(37, 99, 235, 0.28);
   transform: translateY(-1px);
 }
 .btn-secondary:disabled {
@@ -265,20 +221,20 @@ textarea {
 }
 
 .chip-active {
-  background: rgba(99, 102, 241, 0.15);
-  border: 1px solid rgba(99, 102, 241, 0.3);
-  color: #818cf8;
+  background: rgba(37, 99, 235, 0.08);
+  border: 1px solid rgba(37, 99, 235, 0.22);
+  color: #1d4ed8;
 }
 
 .chip-inactive {
-  background: rgba(30, 41, 59, 0.5);
-  border: 1px solid rgba(148, 163, 184, 0.12);
-  color: #94a3b8;
+  background: #ffffff;
+  border: 1px solid rgba(82, 97, 115, 0.14);
+  color: #526173;
 }
 
 .chip-inactive:hover {
-  border-color: rgba(148, 163, 184, 0.25);
-  color: #e2e8f0;
+  border-color: rgba(37, 99, 235, 0.24);
+  color: #1d4ed8;
 }
 
 /* === Mobile sidebar === */
@@ -292,7 +248,7 @@ textarea {
     max-height: 70vh;
     border-top-left-radius: 1.25rem;
     border-top-right-radius: 1.25rem;
-    box-shadow: 0 -4px 30px rgba(0, 0, 0, 0.5);
+    box-shadow: 0 -10px 30px rgba(15, 23, 42, 0.14);
   }
 }
 
