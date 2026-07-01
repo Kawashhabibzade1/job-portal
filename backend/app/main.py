@@ -1,10 +1,69 @@
 from collections.abc import Callable
+import json
+from queue import Empty, Queue
+from threading import Thread
+import time
+from uuid import uuid4
 
-from fastapi import Body, FastAPI, HTTPException, Query, Request
+from pathlib import Path
+
+from fastapi import Body, FastAPI, File, HTTPException, Query, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse, StreamingResponse
 
 from app.config import settings
-from app.models import JobPosting, JobSearchResponse
+from app.env import save_runtime_environment
+from app.models import (
+    AlertCreate,
+    ApplicationCreate,
+    ApplicationPackageRequest,
+    ApplicationPackageResponse,
+    ApplicationRecord,
+    ApplicationStats,
+    ApplicationUpdate,
+    ApplyAutomationRequest,
+    ApplyAutomationResponse,
+    BookmarkedJob,
+    ChatRequest,
+    ChatResponse,
+    DebateRequest,
+    DebateResponse,
+    CoverLetterRequest,
+    CoverLetterResponse,
+    DocumentUpdate,
+    CvCompareRequest,
+    CvCompareResponse,
+    CvImproveRequest,
+    CvImproveResponse,
+    ExportRequest,
+    FeedbackRequest,
+    FeedbackResponse,
+    FollowUpRequest,
+    FollowUpResponse,
+    GeneratedFile,
+    InterviewPrepRequest,
+    InterviewPrepResponse,
+    JobCompareRequest,
+    JobCompareResponse,
+    JobMatchRequest,
+    JobMatchResponse,
+    JobPosting,
+    JobSearchResponse,
+    LinkedInMessageRequest,
+    LinkedInMessageResponse,
+    PdfMergeRequest,
+    PdfOperationResponse,
+    PdfOrganizeRequest,
+    ProfileUpdate,
+    RoadmapRequest,
+    RoadmapResponse,
+    SalaryInsightsRequest,
+    SalaryInsightsResponse,
+    SavedAlert,
+    UploadedDocument,
+    UserProfile,
+    WeeklyReportResponse,
+)
 from app.providers.adzuna import search_adzuna
 from app.providers.arbeitsagentur import search_arbeitsagentur
 from app.providers.arbeitnow import search_arbeitnow
@@ -12,6 +71,7 @@ from app.providers.jsearch import search_jsearch
 from app.providers.jooble import search_jooble
 from app.providers.portal_search import (
     search_arcs_community,
+    search_english_jobs_be,
     search_healthjobs_uk,
     search_ifs_uk,
     search_jobs_ch,
@@ -22,6 +82,7 @@ from app.providers.portal_search import (
     search_nhs_jobs,
     search_northcyprus_cv,
     search_iskibris,
+    search_stepstone_be,
     search_trnc_research,
     search_reed_uk,
 )
@@ -37,9 +98,56 @@ from app.services.location import (
     provider_location_query,
 )
 from app.services.normalize import normalize_jobs
-from app.services.query_expansion import expanded_job_queries, expanded_relevance_terms
+from app.services.query_expansion import expanded_job_queries
 from app.services.rate_limit import scrape_rate_limiter
-from app.services.relevance import filter_jobs_by_any_term, filter_relevant_jobs
+from app.services.ai_search import smart_filter_jobs, translated_query_variants
+from app.services.agent_orchestrator import classify_intent, handle_chat
+from app.services.apply_automation import prepare_apply_automation
+from app.services.artifact_service import (
+    build_application_package,
+    export_cover_letter,
+    get_generated_file,
+    list_generated_files,
+    merge_pdfs,
+    organize_pdf,
+)
+from app.services.career_tools import (
+    analyze_feedback,
+    build_roadmap,
+    compare_cvs,
+    improve_cv,
+    interview_prep,
+)
+from app.services.debate_service import run_debate
+from app.services.document_builder import create_cover_letter
+from app.services.document_service import list_documents, store_upload, update_document
+from app.services.llm_adapter import LlmAdapter
+from app.services.matching_service import rank_jobs
+from app.services.profile_service import (
+    create_application,
+    get_profile,
+    list_applications,
+    save_profile,
+    update_application,
+    update_profile,
+)
+from app.services.serialization import model_dump
+from app.services.salary_insights import salary_insights
+from app.services.bookmarks_service import (
+    add_bookmark,
+    list_bookmarks,
+    remove_bookmark,
+)
+from app.services.extras_service import (
+    application_stats,
+    compare_jobs,
+    create_alert,
+    delete_alert,
+    generate_follow_up,
+    generate_linkedin_message,
+    list_alerts,
+    weekly_report,
+)
 
 
 Provider = Callable[..., list[JobPosting]]
@@ -74,6 +182,8 @@ PROVIDERS: dict[str, Provider] = {
     "new_scientist_jobs": search_new_scientist_jobs,
     "ifs_uk": search_ifs_uk,
     "arcs_community": search_arcs_community,
+    "english_jobs_be": search_english_jobs_be,
+    "stepstone_be": search_stepstone_be,
     "northcyprus_cv": search_northcyprus_cv,
     "iskibris": search_iskibris,
     "trnc_research": search_trnc_research,
@@ -81,6 +191,7 @@ PROVIDERS: dict[str, Provider] = {
 
 SUPPORTED_COUNTRIES = {
     "at": "Austria",
+    "be": "Belgium",
     "ch": "Switzerland",
     "de": "Germany",
     "gb": "United Kingdom",
@@ -91,7 +202,7 @@ SOURCE_COUNTRIES = {
     "arbeitsagentur": {"de"},
     "arbeitnow": {"de"},
     "indeed": {"de"},
-    "linkedin": {"de"},
+    "linkedin": {"at", "be", "ch", "de", "gb", "tr"},
     "karriere_at": {"at"},
     "jobs_ch": {"ch"},
     "jobup_ch": {"ch"},
@@ -102,6 +213,8 @@ SOURCE_COUNTRIES = {
     "new_scientist_jobs": {"gb"},
     "ifs_uk": {"gb"},
     "arcs_community": {"gb"},
+    "english_jobs_be": {"be"},
+    "stepstone_be": {"be"},
     "northcyprus_cv": {"tr"},
     "iskibris": {"tr"},
     "trnc_research": {"tr"},
@@ -112,6 +225,17 @@ SOURCE_COUNTRIES = {
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@app.get("/api/llm/status")
+def llm_status_endpoint() -> dict[str, object]:
+    return LlmAdapter().status()
+
+
+@app.put("/api/llm/settings")
+def llm_settings_endpoint(payload: dict[str, str] = Body(default_factory=dict)) -> dict[str, object]:
+    save_runtime_environment(payload)
+    return LlmAdapter().status()
 
 
 def _selected_sources(sources: str | None) -> list[str]:
@@ -203,7 +327,10 @@ def search_jobs(
     jobs: list[JobPosting] = []
     errors: dict[str, str] = {}
     source_counts: dict[str, int] = {source: 0 for source in selected_sources}
-    search_queries = expanded_job_queries(query)
+    search_queries = []
+    for search_query in translated_query_variants(query, selected_countries):
+        search_queries.extend(expanded_job_queries(search_query))
+    search_queries = list(dict.fromkeys(search_queries))
 
     for source in selected_sources:
         for search_country in selected_countries:
@@ -231,10 +358,9 @@ def search_jobs(
         normalized = filter_jobs_by_location(normalized, location)
     else:
         normalized = filter_jobs_by_countries(normalized, selected_countries, include_remote)
-    normalized = filter_jobs_by_any_term(normalized, expanded_relevance_terms(query))
-    relevance_query = "" if len(search_queries) > 1 else query
-    normalized = filter_relevant_jobs(normalized, relevance_query)
     unique = deduplicate_jobs(normalized)
+    filter_result = smart_filter_jobs(unique, query, selected_countries)
+    unique = filter_result.jobs
     for job in unique:
         source_key = _source_key(job.source)
         source_counts[source_key] = source_counts.get(source_key, 0) + 1
@@ -248,6 +374,9 @@ def search_jobs(
         jobs=unique,
         sources=source_counts,
         errors=errors,
+        search_queries=search_queries,
+        ai_filter_provider=filter_result.provider,
+        ai_filter_note=filter_result.note,
     )
 
 
@@ -266,6 +395,7 @@ def search_jobs_alias(
         country=country,
         sources=sources,
         include_remote=include_remote,
+        refresh=False,
     )
 
 
@@ -341,3 +471,326 @@ def deduplicate_endpoint(
 ) -> dict[str, object]:
     unique = deduplicate_jobs(normalize_jobs(jobs))
     return {"count": len(unique), "jobs": unique}
+
+
+def _internal_search(
+    query: str = "",
+    location: str = "",
+    country: str = "all",
+    sources: str | None = None,
+    include_remote: bool = True,
+) -> JobSearchResponse:
+    return search_jobs(
+        query=query,
+        location=location,
+        country=country,
+        sources=sources,
+        include_remote=include_remote,
+        refresh=False,
+    )
+
+
+@app.post("/api/chat", response_model=ChatResponse)
+def chat_endpoint(payload: ChatRequest) -> ChatResponse:
+    return handle_chat(payload, _internal_search)
+
+
+CHAT_STREAM_STATUSES = {
+    "search": "Searching live job sources...",
+    "match": "Ranking jobs against your profile...",
+    "cover_letter": "Drafting your cover letter...",
+    "apply": "Preparing application steps. Final submit still needs your confirmation.",
+    "tracker": "Loading your application tracker...",
+    "cv_improve": "Reviewing your CV and building improvements...",
+    "interview": "Preparing interview practice...",
+    "roadmap": "Building your skill roadmap...",
+    "feedback": "Analyzing the rejection feedback...",
+    "career_advice": "Reading your profile and career direction...",
+    "profile": "Opening your career profile...",
+    "general": "Thinking through your request...",
+}
+
+
+def _sse_event(event: str, data: dict) -> str:
+    payload = {"event": event, **data}
+    return f"data: {json.dumps(payload, default=str)}\n\n"
+
+
+def _text_chunks(text: str):
+    chunk = ""
+    for character in text:
+        chunk += character
+        if character.isspace() or len(chunk) >= 18:
+            yield chunk
+            chunk = ""
+    if chunk:
+        yield chunk
+
+
+@app.post("/api/chat/stream")
+def chat_stream_endpoint(payload: ChatRequest) -> StreamingResponse:
+    conversation_id = payload.conversation_id or str(uuid4())
+    if hasattr(payload, "model_copy"):
+        live_payload = payload.model_copy(update={"conversation_id": conversation_id})
+    else:
+        live_payload = payload.copy(update={"conversation_id": conversation_id})
+    intent = classify_intent(live_payload.message)
+    status = CHAT_STREAM_STATUSES.get(intent, CHAT_STREAM_STATUSES["general"])
+
+    def stream():
+        yield _sse_event("conversation", {"conversation_id": conversation_id})
+        yield _sse_event("status", {"message": status, "intent": intent})
+        result_queue: Queue = Queue(maxsize=1)
+
+        def run_chat() -> None:
+            try:
+                result_queue.put(("response", handle_chat(live_payload, _internal_search)))
+            except Exception as exc:
+                result_queue.put(("error", exc))
+
+        Thread(target=run_chat, daemon=True).start()
+
+        while True:
+            try:
+                kind, result = result_queue.get(timeout=0.45)
+                break
+            except Empty:
+                yield _sse_event("status", {"message": "Still working...", "intent": intent})
+
+        if kind == "error":
+            yield _sse_event("error", {"message": str(result)})
+            return
+
+        response = result
+        for chunk in _text_chunks(response.message):
+            yield _sse_event("chunk", {"text": chunk})
+            time.sleep(0.006)
+        yield _sse_event("response", {"response": model_dump(response)})
+        yield _sse_event("done", {})
+
+    return StreamingResponse(
+        stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
+@app.post("/api/documents/upload", response_model=UploadedDocument)
+async def upload_document(file: UploadFile = File(...)) -> UploadedDocument:
+    return await store_upload(file)
+
+
+@app.get("/api/documents", response_model=list[UploadedDocument])
+def documents_endpoint() -> list[UploadedDocument]:
+    return list_documents()
+
+
+@app.patch("/api/documents/{document_id}", response_model=UploadedDocument)
+def update_document_endpoint(document_id: str, payload: DocumentUpdate) -> UploadedDocument:
+    document = update_document(document_id, payload)
+    if not document:
+        raise HTTPException(status_code=404, detail="Document not found")
+    return document
+
+
+@app.get("/api/profile", response_model=UserProfile)
+def profile_endpoint() -> UserProfile:
+    return get_profile()
+
+
+@app.put("/api/profile", response_model=UserProfile)
+def update_profile_endpoint(payload: ProfileUpdate) -> UserProfile:
+    return update_profile(payload)
+
+
+@app.post("/api/jobs/match", response_model=JobMatchResponse)
+def match_jobs_endpoint(payload: JobMatchRequest) -> JobMatchResponse:
+    jobs = payload.jobs
+    if not jobs and (payload.query or payload.location):
+        sources = ",".join(payload.sources) if payload.sources else None
+        result = search_jobs(
+            query=payload.query,
+            location=payload.location,
+            country=payload.country,
+            sources=sources,
+            include_remote=payload.include_remote,
+            refresh=False,
+        )
+        jobs = result.jobs
+    matches = rank_jobs(jobs, get_profile(), payload.cv_text)
+    return JobMatchResponse(count=len(matches), matches=matches)
+
+
+@app.post("/api/agents/debate", response_model=DebateResponse)
+def debate_endpoint(payload: DebateRequest) -> DebateResponse:
+    return run_debate(payload, get_profile())
+
+
+@app.post("/api/documents/cover-letter", response_model=CoverLetterResponse)
+def cover_letter_endpoint(payload: CoverLetterRequest) -> CoverLetterResponse:
+    return create_cover_letter(payload, get_profile())
+
+
+@app.post("/api/documents/export-cover-letter", response_model=GeneratedFile)
+def export_cover_letter_endpoint(payload: ExportRequest) -> GeneratedFile:
+    return export_cover_letter(payload)
+
+
+@app.get("/api/documents/generated", response_model=list[GeneratedFile])
+def generated_files_endpoint() -> list[GeneratedFile]:
+    return list_generated_files()
+
+
+@app.get("/api/documents/generated/{file_id}/download")
+def download_generated_file(file_id: str) -> FileResponse:
+    file = get_generated_file(file_id)
+    if not file or not Path(file.path).exists():
+        raise HTTPException(status_code=404, detail="Generated file not found")
+    return FileResponse(file.path, media_type=file.mime_type, filename=file.filename)
+
+
+@app.post("/api/documents/application-package", response_model=ApplicationPackageResponse)
+def application_package_endpoint(payload: ApplicationPackageRequest) -> ApplicationPackageResponse:
+    return build_application_package(payload, get_profile())
+
+
+@app.post("/api/pdf/merge", response_model=PdfOperationResponse)
+def merge_pdf_endpoint(payload: PdfMergeRequest) -> PdfOperationResponse:
+    try:
+        return merge_pdfs(payload)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/pdf/organize", response_model=PdfOperationResponse)
+def organize_pdf_endpoint(payload: PdfOrganizeRequest) -> PdfOperationResponse:
+    try:
+        return organize_pdf(payload)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/cv/improve", response_model=CvImproveResponse)
+def improve_cv_endpoint(payload: CvImproveRequest) -> CvImproveResponse:
+    return improve_cv(payload, get_profile())
+
+
+@app.post("/api/cv/compare", response_model=CvCompareResponse)
+def compare_cv_endpoint(payload: CvCompareRequest) -> CvCompareResponse:
+    return compare_cvs(payload)
+
+
+@app.post("/api/interview/prepare", response_model=InterviewPrepResponse)
+def interview_prep_endpoint(payload: InterviewPrepRequest) -> InterviewPrepResponse:
+    return interview_prep(payload, get_profile())
+
+
+@app.post("/api/feedback/rejection", response_model=FeedbackResponse)
+def rejection_feedback_endpoint(payload: FeedbackRequest) -> FeedbackResponse:
+    return analyze_feedback(payload, get_profile())
+
+
+@app.post("/api/roadmap/skills", response_model=RoadmapResponse)
+def roadmap_endpoint(payload: RoadmapRequest) -> RoadmapResponse:
+    return build_roadmap(payload, get_profile())
+
+
+@app.post("/api/apply/automation", response_model=ApplyAutomationResponse)
+def apply_automation_endpoint(payload: ApplyAutomationRequest) -> ApplyAutomationResponse:
+    return prepare_apply_automation(payload, get_profile())
+
+
+@app.get("/api/applications", response_model=list[ApplicationRecord])
+def applications_endpoint() -> list[ApplicationRecord]:
+    return list_applications()
+
+
+@app.post("/api/applications", response_model=ApplicationRecord)
+def create_application_endpoint(payload: ApplicationCreate) -> ApplicationRecord:
+    return create_application(payload)
+
+
+@app.patch("/api/applications/{application_id}", response_model=ApplicationRecord)
+def update_application_endpoint(
+    application_id: str,
+    payload: ApplicationUpdate,
+) -> ApplicationRecord:
+    application = update_application(application_id, payload)
+    if not application:
+        raise HTTPException(status_code=404, detail="Application not found")
+    return application
+
+
+# --- New feature endpoints ---
+
+
+@app.post("/api/jobs/salary-insights", response_model=SalaryInsightsResponse)
+def salary_insights_endpoint(payload: SalaryInsightsRequest) -> SalaryInsightsResponse:
+    return salary_insights(payload)
+
+
+@app.get("/api/alerts", response_model=list[SavedAlert])
+def alerts_list_endpoint() -> list[SavedAlert]:
+    return list_alerts()
+
+
+@app.post("/api/alerts", response_model=SavedAlert)
+def alerts_create_endpoint(payload: AlertCreate) -> SavedAlert:
+    return create_alert(payload)
+
+
+@app.delete("/api/alerts/{alert_id}")
+def alerts_delete_endpoint(alert_id: str) -> dict[str, bool]:
+    removed = delete_alert(alert_id)
+    if not removed:
+        raise HTTPException(status_code=404, detail="Alert not found")
+    return {"deleted": True}
+
+
+@app.get("/api/applications/stats", response_model=ApplicationStats)
+def application_stats_endpoint() -> ApplicationStats:
+    return application_stats(get_profile())
+
+
+@app.post("/api/documents/follow-up", response_model=FollowUpResponse)
+def follow_up_endpoint(payload: FollowUpRequest) -> FollowUpResponse:
+    return generate_follow_up(payload, get_profile())
+
+
+@app.post("/api/documents/linkedin-message", response_model=LinkedInMessageResponse)
+def linkedin_message_endpoint(payload: LinkedInMessageRequest) -> LinkedInMessageResponse:
+    return generate_linkedin_message(payload, get_profile())
+
+
+@app.post("/api/jobs/compare", response_model=JobCompareResponse)
+def compare_jobs_endpoint(payload: JobCompareRequest) -> JobCompareResponse:
+    return compare_jobs(payload, get_profile())
+
+
+@app.get("/api/reports/weekly", response_model=WeeklyReportResponse)
+def weekly_report_endpoint() -> WeeklyReportResponse:
+    return weekly_report(get_profile())
+
+
+@app.get("/api/jobs/bookmarks", response_model=list[BookmarkedJob])
+def bookmarks_list_endpoint() -> list[BookmarkedJob]:
+    return list_bookmarks()
+
+
+@app.post("/api/jobs/bookmarks", response_model=BookmarkedJob)
+def bookmarks_add_endpoint(
+    job: JobPosting = Body(...),
+    note: str = Body(default=""),
+) -> BookmarkedJob:
+    return add_bookmark(job, note)
+
+
+@app.delete("/api/jobs/bookmarks/{bookmark_id}")
+def bookmarks_delete_endpoint(bookmark_id: str) -> dict[str, bool]:
+    removed = remove_bookmark(bookmark_id)
+    if not removed:
+        raise HTTPException(status_code=404, detail="Bookmark not found")
+    return {"deleted": True}

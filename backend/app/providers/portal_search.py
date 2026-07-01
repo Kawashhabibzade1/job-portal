@@ -190,6 +190,26 @@ def _trnc_research_url(query: str, location: str) -> str:
     return "https://grad.emu.edu.tr/en/fees/research-assistantships-opportunities"
 
 
+def _english_jobs_be_url(query: str, location: str) -> str:
+    path = f"/jobs/{_slug(query or 'english')}"
+    return f"https://englishjobs.be{path}?{urlencode({'format': 'markdown'})}"
+
+
+def _stepstone_be_url(query: str, location: str) -> str:
+    query_slug = _slug(query or "jobs")
+    location_slug = _slug(location or "belgium")
+    return f"https://www.stepstone.be/jobs/{query_slug}/in-{location_slug}"
+
+
+def _strip_markdown(value: str | None) -> str | None:
+    cleaned = _clean(value)
+    if not cleaned:
+        return None
+    cleaned = re.sub(r"!\[[^\]]*\]\([^)]*\)", "", cleaned)
+    cleaned = re.sub(r"[*_`]+", "", cleaned)
+    return _clean(cleaned)
+
+
 def _parse_karriere(text: str, portal: Portal) -> list[JobPosting]:
     results: list[JobPosting] = []
     blocks = re.findall(
@@ -530,6 +550,124 @@ def _parse_ifs(text: str, portal: Portal) -> list[JobPosting]:
     return results[:25]
 
 
+def _parse_english_jobs_be(text: str, portal: Portal) -> list[JobPosting]:
+    results: list[JobPosting] = []
+    blocks = re.findall(
+        r"\[###\s+(.*?)\]\((.*?)\)\s*(.*?)(?=\n\[###\s+|\nreport probem|\Z)",
+        text,
+        flags=re.DOTALL | re.IGNORECASE,
+    )
+
+    for title, href, body in blocks:
+        bullets = [
+            item
+            for item in (
+                _strip_markdown(match)
+                for match in re.findall(r"^\*\s+(.+)$", body, flags=re.MULTILINE)
+            )
+            if item
+        ]
+        description = re.sub(r"^\*\s+.+$", "", body, flags=re.MULTILINE)
+        description = _strip_markdown(description)
+        if description and description.lower().startswith("logo"):
+            description = _strip_markdown(description[4:])
+
+        results.append(
+            JobPosting(
+                title=_strip_markdown(title) or "",
+                company=bullets[0] if bullets else None,
+                location=_portal_location(portal, bullets[1] if len(bullets) > 1 else None),
+                description=description,
+                source=portal.source,
+                source_url=_absolute_url(portal, href),
+                apply_url=_absolute_url(portal, href),
+                date_posted=bullets[2] if len(bullets) > 2 else None,
+                is_remote="remote" in " ".join([title, body]).lower(),
+            )
+        )
+
+    return results[:25]
+
+
+def _parse_stepstone_be(text: str, portal: Portal) -> list[JobPosting]:
+    results: list[JobPosting] = []
+    seen: set[str] = set()
+
+    for script in re.findall(
+        r'<script[^>]+type="application/ld\+json"[^>]*>(.*?)</script>',
+        text,
+        flags=re.DOTALL | re.IGNORECASE,
+    ):
+        try:
+            payload = json.loads(html.unescape(script))
+        except json.JSONDecodeError:
+            continue
+        items = payload if isinstance(payload, list) else [payload]
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            graph = item.get("@graph") if isinstance(item.get("@graph"), list) else [item]
+            for entry in graph:
+                if not isinstance(entry, dict) or entry.get("@type") != "JobPosting":
+                    continue
+                url = _absolute_url(portal, entry.get("url"))
+                if not url or url in seen:
+                    continue
+                seen.add(url)
+                hiring = entry.get("hiringOrganization") or {}
+                location = entry.get("jobLocation")
+                if isinstance(location, list):
+                    location = location[0] if location else {}
+                address = location.get("address") if isinstance(location, dict) else {}
+                location_text = ", ".join(
+                    item
+                    for item in [
+                        address.get("addressLocality") if isinstance(address, dict) else None,
+                        address.get("addressCountry") if isinstance(address, dict) else None,
+                    ]
+                    if item
+                )
+                results.append(
+                    JobPosting(
+                        title=_clean(entry.get("title")) or "",
+                        company=hiring.get("name") if isinstance(hiring, dict) else None,
+                        location=_portal_location(portal, location_text or None),
+                        description=_clean(entry.get("description")),
+                        source=portal.source,
+                        source_url=url,
+                        apply_url=url,
+                        date_posted=entry.get("datePosted"),
+                        is_remote="remote" in json.dumps(entry).lower(),
+                    )
+                )
+
+    if results:
+        return results[:25]
+
+    for match in re.finditer(
+        r'<a[^>]+href="([^"]*(?:/jobs?/|/job/)[^"]*)"[^>]*>(.*?)</a>',
+        text,
+        flags=re.DOTALL | re.IGNORECASE,
+    ):
+        url = _absolute_url(portal, match.group(1))
+        title = _clean(match.group(2))
+        if not url or url in seen or not title or len(title) < 6:
+            continue
+        seen.add(url)
+        results.append(
+            JobPosting(
+                title=title,
+                location=_portal_location(portal, None),
+                source=portal.source,
+                source_url=url,
+                apply_url=url,
+                is_remote="remote" in match.group(0).lower(),
+            )
+        )
+
+    return results[:25]
+
+
 def _parse_northcyprus_cv(text: str, portal: Portal) -> list[JobPosting]:
     results: list[JobPosting] = []
     seen: set[str] = set()
@@ -727,6 +865,20 @@ PORTALS = {
         parser=_parse_arcs,
         country_name="United Kingdom",
     ),
+    "english_jobs_be": Portal(
+        source="EnglishJobs.be",
+        base_url="https://englishjobs.be",
+        url_builder=_english_jobs_be_url,
+        parser=_parse_english_jobs_be,
+        country_name="Belgium",
+    ),
+    "stepstone_be": Portal(
+        source="StepStone Belgium",
+        base_url="https://www.stepstone.be",
+        url_builder=_stepstone_be_url,
+        parser=_parse_stepstone_be,
+        country_name="Belgium",
+    ),
     "northcyprus_cv": Portal(
         source="NorthCyprus.cv",
         base_url="https://northcyprus.cv",
@@ -821,6 +973,14 @@ def search_ifs_uk(query: str, location: str = "") -> list[JobPosting]:
 
 def search_arcs_community(query: str, location: str = "") -> list[JobPosting]:
     return search_portal("arcs_community", query, location)
+
+
+def search_english_jobs_be(query: str, location: str = "") -> list[JobPosting]:
+    return search_portal("english_jobs_be", query, location)
+
+
+def search_stepstone_be(query: str, location: str = "") -> list[JobPosting]:
+    return search_portal("stepstone_be", query, location)
 
 
 def search_northcyprus_cv(query: str, location: str = "") -> list[JobPosting]:

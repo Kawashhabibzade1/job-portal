@@ -3,4 +3,10 @@ uvicorn
 requests
 python-dotenv
 pydantic
-
+python-multipart
+pypdf
+python-docx
+httpx2
+reportlab
+pillow
+pytesseract

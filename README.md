@@ -31,7 +31,7 @@ Configured providers:
 - Arbeitsagentur: German job listings with apply links
 - Arbeitnow: Europe-focused tech jobs
 - Indeed: German search-result scraping with retry and 1-hour in-memory cache
-- LinkedIn: public jobs-page scraping with retry and 1-hour in-memory cache
+- LinkedIn: public jobs-page scraping across configured countries with retry and 1-hour in-memory cache
 - Karriere.at: Austria-focused public portal search
 - Jobs.ch: Switzerland-focused public portal search
 - Jobup.ch: Switzerland-focused public portal search
@@ -42,6 +42,8 @@ Configured providers:
 - New Scientist Jobs: United Kingdom science job portal
 - IFS: United Kingdom Institute for Fiscal Studies jobs page
 - ARCS Community: United Kingdom ARCS jobs board
+- EnglishJobs.be: Belgium-focused English-speaking jobs portal
+- StepStone Belgium: Belgium-focused public job portal search
 - NorthCyprus.cv: Northern Cyprus local jobs and university-focused discovery
 - İş Kıbrıs: Northern Cyprus local jobs portal
 - TRNC Research Portals: EMU, NEU, and CIU academic/research application pages
@@ -53,10 +55,11 @@ Configured providers:
 Local source map:
 
 - Germany: `arbeitsagentur`, `arbeitnow`, `indeed`, `linkedin`
-- Austria: `karriere_at`
-- Switzerland: `jobs_ch`, `jobup_ch`
-- United Kingdom: `reed_uk`, `nhs_jobs`, `healthjobs_uk`, `jobs_ac_uk`, `new_scientist_jobs`, `ifs_uk`, `arcs_community`
-- Northern Cyprus: `northcyprus_cv`, `iskibris`, `trnc_research`
+- Austria: `karriere_at`, `linkedin`
+- Switzerland: `jobs_ch`, `jobup_ch`, `linkedin`
+- United Kingdom: `reed_uk`, `nhs_jobs`, `healthjobs_uk`, `jobs_ac_uk`, `new_scientist_jobs`, `ifs_uk`, `arcs_community`, `linkedin`
+- Belgium: `english_jobs_be`, `stepstone_be`, `linkedin`
+- Northern Cyprus: `northcyprus_cv`, `iskibris`, `trnc_research`, `linkedin`
 
 ## Frontend
 
