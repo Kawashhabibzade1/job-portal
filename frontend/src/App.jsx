@@ -596,6 +596,11 @@ export default function App() {
     if (file) handleUploadFile(file);
   }
 
+  function openUploadPicker() {
+    if (uploading) return;
+    uploadInputRef.current?.click();
+  }
+
   async function runManualSearch(event) {
     event.preventDefault(); setError(""); setSearchLoading(true); setSearchStep(0); setResult(null);
     searchStepTimer.current = setInterval(() => setSearchStep((s) => Math.min(s + 1, SEARCH_STEPS.length - 1)), 2500);
@@ -1262,11 +1267,14 @@ export default function App() {
           {activeView === "documents" && (
             <div className="space-y-4">
               {/* Upload zone */}
-              <div
-                className={`glass rounded-xl border-2 p-6 text-center transition-all duration-200 ${dragOver ? "border-ocean bg-ocean/5 scale-[1.01]" : "border-dashed border-line"}`}
+              <button
+                type="button"
+                className={`glass block w-full rounded-xl border-2 p-6 text-center transition-all duration-200 ${dragOver ? "border-ocean bg-ocean/5 scale-[1.01]" : "border-dashed border-line"}`}
+                onClick={openUploadPicker}
                 onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
                 onDragLeave={() => setDragOver(false)}
                 onDrop={handleDrop}
+                disabled={uploading}
               >
                 <div className="flex flex-col items-center gap-3">
                   <div className={`flex h-14 w-14 items-center justify-center rounded-2xl transition-all ${dragOver ? "bg-ocean text-white scale-110" : "bg-ocean/10 text-ocean"}`}>
@@ -1276,20 +1284,20 @@ export default function App() {
                     <p className="font-semibold text-ink">{uploading ? "Uploading & processing…" : dragOver ? "Drop to upload!" : "Upload your CV or documents"}</p>
                     <p className="mt-1 text-sm text-ink-faint">Drag & drop, or tap to browse · PDF, DOCX, TXT</p>
                   </div>
-                  <label htmlFor="doc-upload" className="btn-primary btn-press cursor-pointer">
+                  <span className="btn-primary btn-press pointer-events-none cursor-pointer">
                     <Upload className="h-4 w-4" />{uploading ? "Processing…" : "Choose file"}
-                  </label>
-                  <input
-                    id="doc-upload"
-                    ref={uploadInputRef}
-                    type="file"
-                    accept="application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,.pdf,.doc,.docx,.txt"
-                    className="sr-only"
-                    onChange={handleUploadChange}
-                    disabled={uploading}
-                  />
+                  </span>
                 </div>
-              </div>
+              </button>
+              <input
+                id="doc-upload"
+                ref={uploadInputRef}
+                type="file"
+                accept="application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,.pdf,.doc,.docx,.txt"
+                className="sr-only"
+                onChange={handleUploadChange}
+                disabled={uploading}
+              />
 
               {cvSuggestions && <CvSuggestionsPanel suggestions={cvSuggestions} />}
 
