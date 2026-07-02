@@ -98,6 +98,7 @@ from app.providers.portal_search import (
 )
 from app.providers.remotive import search_remotive
 from app.providers.scraped import search_indeed, search_linkedin
+from app.providers.webcrawler import search_webcrawler
 from app.services.cache import job_cache
 from app.services.deduplicate import deduplicate_jobs
 from app.services.logger import logger
@@ -238,6 +239,7 @@ PROVIDERS: dict[str, Provider] = {
     "northcyprus_cv": search_northcyprus_cv,
     "iskibris": search_iskibris,
     "trnc_research": search_trnc_research,
+    "webcrawler": search_webcrawler,
 }
 
 SUPPORTED_COUNTRIES = {
@@ -255,6 +257,7 @@ SOURCE_COUNTRIES = {
     "arbeitnow": {"de"},
     "indeed": {"de"},
     "linkedin": {"at", "be", "ch", "de", "gb", "nl", "tr"},
+    "webcrawler": {"at", "be", "ch", "de", "gb", "nl", "tr"},
     "karriere_at": {"at"},
     "jobs_ch": {"ch"},
     "jobup_ch": {"ch"},
@@ -346,7 +349,7 @@ def _run_provider(
     country: str,
     refresh: bool = False,
 ) -> list[JobPosting]:
-    if source == "adzuna":
+    if source in {"adzuna", "webcrawler"}:
         return provider(query, location, country)
     if source in {"indeed", "linkedin"}:
         return provider(query, location, refresh)
@@ -383,6 +386,8 @@ def search_jobs(
         for source in _selected_sources(sources)
         if any(_source_supports_country(source, search_country) for search_country in selected_countries)
     ]
+    if "webcrawler" not in selected_sources:
+        selected_sources.append("webcrawler")
     jobs: list[JobPosting] = []
     errors: dict[str, str] = {}
     source_counts: dict[str, int] = {source: 0 for source in selected_sources}
