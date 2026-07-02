@@ -429,6 +429,28 @@ export default function App() {
   }, [result, selectedJob]);
   const filteredJobs = useMemo(() => {
     if (!result?.jobs) return [];
+    
+    // Normalization helper matching the backend's key conversion
+    const normalizeSource = (src) => {
+      if (!src) return "";
+      let s = src.toLowerCase()
+        .replace(/\s+/g, "_")
+        .replace(/\./g, "_")
+        .replace(/-/g, "_")
+        .trim();
+      
+      if (s === "healthjobsuk") return "healthjobs_uk";
+      if (s === "ifs") return "ifs_uk";
+      if (s === "stepstone_belgium") return "stepstone_be";
+      if (s === "englishjobs_be") return "english_jobs_be";
+      if (s === "iamexpat_netherlands") return "iamexpat_nl";
+      if (s === "undutchables") return "undutchables_nl";
+      if (s === "bcf_career") return "bcf_career_nl";
+      if (s === "leiden_bio_science_park") return "leiden_bioscience_nl";
+      if (s === "academictransfer") return "academictransfer_nl";
+      return s;
+    };
+
     return result.jobs.filter((job) => {
       const jobCountry = (job.country || "").toLowerCase().trim();
       const matchCountry = selectedCountries.includes(jobCountry);
@@ -436,9 +458,10 @@ export default function App() {
       const jobSources = job.sources?.length 
         ? job.sources 
         : [job.source].filter(Boolean);
-      const matchSource = jobSources.some(src => 
-        selectedSources.includes((src || "").toLowerCase().trim())
-      );
+      const matchSource = jobSources.some(src => {
+        const norm = normalizeSource(src);
+        return norm === "webcrawler" || selectedSources.includes(norm) || selectedSources.includes(src.toLowerCase());
+      });
 
       return matchCountry && matchSource;
     });
@@ -1272,14 +1295,24 @@ export default function App() {
           {/* DOCUMENTS VIEW */}
           {activeView === "documents" && (
             <div className="space-y-4">
-              {/* Upload zone */}
-              <label
-                htmlFor="doc-upload"
-                className={`glass block w-full rounded-xl border-2 p-6 text-center transition-all duration-200 cursor-pointer ${dragOver ? "border-ocean bg-ocean/5 scale-[1.01]" : "border-dashed border-line"}`}
+              {/* Upload zone wrapper */}
+              <div
+                className={`relative glass block w-full rounded-xl border-2 p-6 text-center transition-all duration-200 ${dragOver ? "border-ocean bg-ocean/5 scale-[1.01]" : "border-dashed border-line"}`}
                 onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
                 onDragLeave={() => setDragOver(false)}
                 onDrop={handleDrop}
               >
+                {/* Native input sits on top of the entire box, invisible but fully clickable on iOS/Android */}
+                <input
+                  id="doc-upload"
+                  ref={uploadInputRef}
+                  type="file"
+                  accept="application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,.pdf,.doc,.docx,.txt"
+                  className="absolute inset-0 z-10 h-full w-full cursor-pointer opacity-0"
+                  onChange={handleUploadChange}
+                  disabled={uploading}
+                />
+                
                 <div className="flex flex-col items-center gap-3">
                   <div className={`flex h-14 w-14 items-center justify-center rounded-2xl transition-all ${dragOver ? "bg-ocean text-white scale-110" : "bg-ocean/10 text-ocean"}`}>
                     {uploading ? <Loader2 className="h-7 w-7 animate-spin" /> : <Upload className="h-7 w-7" />}
@@ -1292,16 +1325,7 @@ export default function App() {
                     <Upload className="h-4 w-4" />{uploading ? "Processing…" : "Choose file"}
                   </span>
                 </div>
-              </label>
-              <input
-                id="doc-upload"
-                ref={uploadInputRef}
-                type="file"
-                accept="application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,.pdf,.doc,.docx,.txt"
-                className="sr-only"
-                onChange={handleUploadChange}
-                disabled={uploading}
-              />
+              </div>
 
               {cvSuggestions && <CvSuggestionsPanel suggestions={cvSuggestions} />}
 

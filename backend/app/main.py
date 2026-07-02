@@ -411,6 +411,8 @@ def search_jobs(
                         country=search_country,
                         refresh=refresh,
                     )
+                    for j in provider_jobs:
+                        j.country = search_country
                     jobs.extend(provider_jobs)
                 except Exception as exc:
                     errors[source] = str(exc)
