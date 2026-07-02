@@ -1011,16 +1011,6 @@ export default function App() {
                     ))}
                   </div>
                 )}
-                {message.suggestions?.length > 0 && (
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    {message.suggestions.map((suggestion) => (
-                      <button key={suggestion} type="button" onClick={(e) => submitChat(e, suggestion)}
-                        className="btn-press chip chip-inactive cursor-pointer transition hover:border-ocean/40 hover:text-ocean-light">
-                        {suggestion}
-                      </button>
-                    ))}
-                  </div>
-                )}
               </div>
             ))}
             <div ref={chatEndRef} />
@@ -1075,15 +1065,6 @@ export default function App() {
                   <p className="mt-2 max-w-2xl text-sm leading-6 text-ink-muted">
                     Type any request in the chat. The AI can search jobs, rank results, draft cover letters, analyse your CV, and navigate the app.
                   </p>
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    {["Find developer jobs in Berlin", "Show me my profile", "Search remote jobs in UK", "Draft a cover letter", "Open documents"].map((s) => (
-                      <button key={s} type="button"
-                        onClick={(e) => { submitChat(e, s); setMobileChat(true); }}
-                        className="btn-press chip chip-inactive cursor-pointer hover:border-ocean/40 hover:text-ocean-light">
-                        {s}
-                      </button>
-                    ))}
-                  </div>
                 </div>
               </div>
             </div>
@@ -1267,14 +1248,12 @@ export default function App() {
           {activeView === "documents" && (
             <div className="space-y-4">
               {/* Upload zone */}
-              <button
-                type="button"
-                className={`glass block w-full rounded-xl border-2 p-6 text-center transition-all duration-200 ${dragOver ? "border-ocean bg-ocean/5 scale-[1.01]" : "border-dashed border-line"}`}
-                onClick={openUploadPicker}
+              <label
+                htmlFor="doc-upload"
+                className={`glass block w-full rounded-xl border-2 p-6 text-center transition-all duration-200 cursor-pointer ${dragOver ? "border-ocean bg-ocean/5 scale-[1.01]" : "border-dashed border-line"}`}
                 onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
                 onDragLeave={() => setDragOver(false)}
                 onDrop={handleDrop}
-                disabled={uploading}
               >
                 <div className="flex flex-col items-center gap-3">
                   <div className={`flex h-14 w-14 items-center justify-center rounded-2xl transition-all ${dragOver ? "bg-ocean text-white scale-110" : "bg-ocean/10 text-ocean"}`}>
@@ -1288,7 +1267,7 @@ export default function App() {
                     <Upload className="h-4 w-4" />{uploading ? "Processing…" : "Choose file"}
                   </span>
                 </div>
-              </button>
+              </label>
               <input
                 id="doc-upload"
                 ref={uploadInputRef}
