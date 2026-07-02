@@ -427,6 +427,22 @@ export default function App() {
     if (selectedJob) return [selectedJob];
     return result?.jobs?.slice(0, 10) || [];
   }, [result, selectedJob]);
+  const filteredJobs = useMemo(() => {
+    if (!result?.jobs) return [];
+    return result.jobs.filter((job) => {
+      const jobCountry = (job.country || "").toLowerCase().trim();
+      const matchCountry = selectedCountries.includes(jobCountry);
+
+      const jobSources = job.sources?.length 
+        ? job.sources 
+        : [job.source].filter(Boolean);
+      const matchSource = jobSources.some(src => 
+        selectedSources.includes((src || "").toLowerCase().trim())
+      );
+
+      return matchCountry && matchSource;
+    });
+  }, [result, selectedCountries, selectedSources]);
   const allCountriesSelected = selectedCountries.length === COUNTRIES.length;
   const countryParam = allCountriesSelected ? "all" : selectedCountries.join(",");
   const availableProviders = useMemo(
@@ -1180,16 +1196,25 @@ export default function App() {
                     </div>
                   )}
 
-                  <div className="flex min-h-10 flex-wrap items-center justify-between gap-3">
-                    <h2 className="text-lg font-semibold text-ink">{result ? `${result.count} jobs` : "Job dashboard"}</h2>
+                   <div className="flex min-h-10 flex-wrap items-center justify-between gap-3">
+                    <h2 className="text-lg font-semibold text-ink">
+                      {result 
+                        ? `${filteredJobs.length} of ${result.jobs?.length || 0} jobs` 
+                        : "Job dashboard"}
+                    </h2>
                     <div className="flex gap-2">
                       <button type="button" onClick={() => draftCoverLetter()} disabled={!selectedJob} className="btn-secondary btn-press"><FileText className="h-4 w-4" /> Cover letter</button>
                       <button type="button" onClick={() => trackApplication()} disabled={!selectedJob} className="btn-primary btn-press"><Navigation className="h-4 w-4" /> Track</button>
                     </div>
                   </div>
                   {!result && <div className="glass rounded-xl border border-dashed border-line p-8 text-center text-sm text-ink-faint">Ask the chat to find jobs or run a manual search.</div>}
+                  {result && filteredJobs.length === 0 && (
+                    <div className="glass rounded-xl border border-dashed border-line p-8 text-center text-sm text-ink-faint">
+                      No jobs match the selected country &amp; source filters. Adjust checkboxes above to see matches.
+                    </div>
+                  )}
                   <div className="stagger space-y-3">
-                    {result?.jobs?.map((job, index) => (
+                    {filteredJobs.map((job, index) => (
                       <div key={`${job.source}-${job.apply_url || job.source_url || index}`} onClick={() => setSelectedJob(job)}
                         className={`btn-press cursor-pointer rounded-xl transition-all ${selectedJob === job ? "ring-2 ring-ocean/60" : ""}`}>
                         <JobCard job={job} />
