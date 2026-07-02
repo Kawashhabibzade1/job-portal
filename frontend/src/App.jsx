@@ -1296,8 +1296,8 @@ export default function App() {
           {activeView === "documents" && (
             <div className="space-y-4">
               {/* Upload zone wrapper */}
-              <div
-                className={`relative glass block w-full rounded-xl border-2 p-6 text-center transition-all duration-200 ${dragOver ? "border-ocean bg-ocean/5 scale-[1.01]" : "border-dashed border-line"}`}
+              <label
+                className={`relative glass block w-full cursor-pointer rounded-xl border-2 p-6 text-center transition-all duration-200 ${dragOver ? "border-ocean bg-ocean/5 scale-[1.01]" : "border-dashed border-line"}`}
                 onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
                 onDragLeave={() => setDragOver(false)}
                 onDrop={handleDrop}
@@ -1308,12 +1308,12 @@ export default function App() {
                   ref={uploadInputRef}
                   type="file"
                   accept="application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,.pdf,.doc,.docx,.txt"
-                  className="absolute inset-0 z-10 h-full w-full cursor-pointer opacity-0"
+                  className="hidden"
                   onChange={handleUploadChange}
                   disabled={uploading}
                 />
                 
-                <div className="flex flex-col items-center gap-3">
+                <div className="flex flex-col items-center gap-3 pointer-events-none">
                   <div className={`flex h-14 w-14 items-center justify-center rounded-2xl transition-all ${dragOver ? "bg-ocean text-white scale-110" : "bg-ocean/10 text-ocean"}`}>
                     {uploading ? <Loader2 className="h-7 w-7 animate-spin" /> : <Upload className="h-7 w-7" />}
                   </div>
@@ -1321,11 +1321,11 @@ export default function App() {
                     <p className="font-semibold text-ink">{uploading ? "Uploading & processing…" : dragOver ? "Drop to upload!" : "Upload your CV or documents"}</p>
                     <p className="mt-1 text-sm text-ink-faint">Drag & drop, or tap to browse · PDF, DOCX, TXT</p>
                   </div>
-                  <span className="btn-primary btn-press pointer-events-none cursor-pointer">
+                  <span className="btn-primary btn-press">
                     <Upload className="h-4 w-4" />{uploading ? "Processing…" : "Choose file"}
                   </span>
                 </div>
-              </div>
+              </label>
 
               {cvSuggestions && <CvSuggestionsPanel suggestions={cvSuggestions} />}
 

@@ -20,6 +20,7 @@ class JobPosting(BaseModel):
     salary_max: Optional[float] = None
     currency: Optional[str] = None
     is_remote: Optional[bool] = None
+    country: Optional[str] = None
 
 
 class JobSearchResponse(BaseModel):
