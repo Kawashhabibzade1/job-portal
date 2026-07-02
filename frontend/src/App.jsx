@@ -453,7 +453,7 @@ export default function App() {
 
     return result.jobs.filter((job) => {
       const jobCountry = (job.country || "").toLowerCase().trim();
-      const matchCountry = selectedCountries.includes(jobCountry);
+      const matchCountry = !jobCountry || selectedCountries.includes(jobCountry);
 
       const jobSources = job.sources?.length 
         ? job.sources 
