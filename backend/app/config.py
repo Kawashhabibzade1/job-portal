@@ -48,7 +48,7 @@ def get_settings() -> Settings:
         cors_origins=_split_csv(
             os.getenv(
                 "CORS_ORIGINS",
-                "http://localhost:5173,http://127.0.0.1:5173",
+                "http://localhost:5173,http://127.0.0.1:5173,http://localhost:5174,http://127.0.0.1:5174",
             )
         ),
         scraper_timeout_ms=int(os.getenv("SCRAPER_TIMEOUT", "30000")),

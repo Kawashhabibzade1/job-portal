@@ -88,6 +88,25 @@ def infer_profile_from_document(document: UploadedDocument) -> UserProfile:
     return save_profile(profile)
 
 
+def generate_profile_summary_with_llm(cv_text: str, llm) -> str:
+    """Use LLM to generate a clean, professional profile summary from raw CV text."""
+    prompt = (
+        "You are a professional CV writer. Read the following CV text and write a concise, "
+        "professional profile summary in first person (3–5 sentences). "
+        "Focus on: role/field, key skills, years of experience (if mentioned), "
+        "key achievements, and career goal. "
+        "Be specific and avoid generic filler. Output only the summary text.\n\n"
+        f"CV TEXT:\n{cv_text[:3000]}"
+    )
+    try:
+        result = llm.chat([{"role": "user", "content": prompt}])
+        return result.strip() if result else ""
+    except Exception:
+        return cv_text[:1200]
+
+
+
+
 def list_applications() -> list[ApplicationRecord]:
     return get_profile().applications
 

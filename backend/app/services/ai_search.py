@@ -12,6 +12,7 @@ COUNTRY_LANGUAGES = {
     "ch": ["German", "French", "English"],
     "de": ["German", "English"],
     "gb": ["English"],
+    "nl": ["Dutch", "English"],
     "tr": ["Turkish", "English"],
 }
 
@@ -24,6 +25,8 @@ STATIC_QUERY_VARIANTS = {
         "klinischer embryologe",
         "embryologie",
         "embryologiste",
+        "embryoloog",
+        "klinisch embryoloog",
         "embriyolog",
     ],
     "ivf": [
@@ -36,6 +39,8 @@ STATIC_QUERY_VARIANTS = {
         "reproduktionsmedizin",
         "fertility",
         "fertilite",
+        "vruchtbaarheid",
+        "voortplantingsgeneeskunde",
         "tup bebek",
     ],
     "research assistant": [
@@ -44,6 +49,7 @@ STATIC_QUERY_VARIANTS = {
         "wissenschaftlicher mitarbeiter",
         "assistant de recherche",
         "onderzoeksassistent",
+        "onderzoeksmedewerker",
         "arastirma asistani",
     ],
     "laboratory": [
@@ -51,6 +57,7 @@ STATIC_QUERY_VARIANTS = {
         "lab",
         "labor",
         "laboratoire",
+        "laboratorium",
         "laboratuvar",
     ],
 }
@@ -98,7 +105,7 @@ class SearchIntelligenceResult:
     note: str
 
 
-def translated_query_variants(query: str, countries: list[str], limit: int = 8) -> list[str]:
+def translated_query_variants(query: str, countries: list[str], limit: int = 12) -> list[str]:
     cleaned = " ".join(query.split())
     if not cleaned:
         return [""]
@@ -229,6 +236,8 @@ def _llm_filter_jobs(
     ranked.sort(key=lambda item: item[0], reverse=True)
     filtered = [job for _, job in ranked]
     filtered.extend(job for job in tail if id(job) not in kept_ids)
+    if not filtered:
+        return None
 
     return SearchIntelligenceResult(
         jobs=filtered,

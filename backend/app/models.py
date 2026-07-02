@@ -231,6 +231,51 @@ class CvImproveResponse(BaseModel):
     keywords: list[str] = Field(default_factory=list)
 
 
+class CvSuggestion(BaseModel):
+    section: str
+    issue: str
+    recommendation: str
+    priority: Literal["high", "medium", "low"] = "medium"
+
+
+class CvSuggestionsResponse(BaseModel):
+    suggestions: list[CvSuggestion] = Field(default_factory=list)
+    overall_score: int = 0
+    summary: str = ""
+
+
+class ProfileSummaryRequest(BaseModel):
+    document_id: Optional[str] = None
+    cv_text: str = ""
+
+
+class ArtifactRoadmapRequest(BaseModel):
+    job: JobPosting
+    target_country: str = ""
+    languages: list[str] = Field(default_factory=list)
+    profile: Optional["UserProfile"] = None
+
+
+class ArtifactRoadmapStep(BaseModel):
+    category: str
+    title: str
+    description: str
+    required: bool = True
+    link: str = ""
+
+
+class ArtifactRoadmapResponse(BaseModel):
+    job_title: str
+    company: str = ""
+    country: str = ""
+    steps: list[ArtifactRoadmapStep] = Field(default_factory=list)
+    documents_needed: list[str] = Field(default_factory=list)
+    visa_info: str = ""
+    language_requirements: str = ""
+    timeline_weeks: int = 4
+    tips: list[str] = Field(default_factory=list)
+
+
 class CvCompareRequest(BaseModel):
     original_text: str
     revised_text: str

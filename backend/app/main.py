@@ -23,18 +23,22 @@ from app.models import (
     ApplicationUpdate,
     ApplyAutomationRequest,
     ApplyAutomationResponse,
+    ArtifactRoadmapRequest,
+    ArtifactRoadmapResponse,
+    ArtifactRoadmapStep,
     BookmarkedJob,
     ChatRequest,
     ChatResponse,
+    CvImproveRequest,
+    CvImproveResponse,
+    CvSuggestionsResponse,
+    CvCompareRequest,
+    CvCompareResponse,
     DebateRequest,
     DebateResponse,
     CoverLetterRequest,
     CoverLetterResponse,
     DocumentUpdate,
-    CvCompareRequest,
-    CvCompareResponse,
-    CvImproveRequest,
-    CvImproveResponse,
     ExportRequest,
     FeedbackRequest,
     FeedbackResponse,
@@ -54,6 +58,7 @@ from app.models import (
     PdfMergeRequest,
     PdfOperationResponse,
     PdfOrganizeRequest,
+    ProfileSummaryRequest,
     ProfileUpdate,
     RoadmapRequest,
     RoadmapResponse,
@@ -71,19 +76,24 @@ from app.providers.jsearch import search_jsearch
 from app.providers.jooble import search_jooble
 from app.providers.portal_search import (
     search_arcs_community,
+    search_academictransfer_nl,
+    search_bcf_career_nl,
     search_english_jobs_be,
     search_healthjobs_uk,
     search_ifs_uk,
     search_jobs_ch,
     search_jobs_ac_uk,
     search_jobup_ch,
+    search_iamexpat_nl,
     search_karriere_at,
+    search_leiden_bioscience_nl,
     search_new_scientist_jobs,
     search_nhs_jobs,
     search_northcyprus_cv,
     search_iskibris,
     search_stepstone_be,
     search_trnc_research,
+    search_undutchables_nl,
     search_reed_uk,
 )
 from app.providers.remotive import search_remotive
@@ -113,6 +123,7 @@ from app.services.artifact_service import (
 )
 from app.services.career_tools import (
     analyze_feedback,
+    analyze_cv_suggestions,
     build_roadmap,
     compare_cvs,
     improve_cv,
@@ -125,7 +136,9 @@ from app.services.llm_adapter import LlmAdapter
 from app.services.matching_service import rank_jobs
 from app.services.profile_service import (
     create_application,
+    generate_profile_summary_with_llm,
     get_profile,
+    infer_profile_from_document,
     list_applications,
     save_profile,
     update_application,
@@ -157,6 +170,7 @@ app = FastAPI(title="Job Portal API", version="0.1.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,
+    allow_origin_regex=r"https?://(localhost|127\.0\.0\.1|\[::1\])(:\d+)?",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -165,8 +179,11 @@ app.add_middleware(
 
 STRIPPED_API_PREFIXES = (
     "/agents",
+    "/alerts",
     "/applications",
     "/apply",
+    "/artifacts",
+    "/bookmarks",
     "/chat",
     "/cv",
     "/documents",
@@ -176,8 +193,10 @@ STRIPPED_API_PREFIXES = (
     "/llm",
     "/pdf",
     "/profile",
+    "/reports",
     "/roadmap",
 )
+
 
 
 @app.middleware("http")
@@ -211,6 +230,11 @@ PROVIDERS: dict[str, Provider] = {
     "arcs_community": search_arcs_community,
     "english_jobs_be": search_english_jobs_be,
     "stepstone_be": search_stepstone_be,
+    "iamexpat_nl": search_iamexpat_nl,
+    "undutchables_nl": search_undutchables_nl,
+    "bcf_career_nl": search_bcf_career_nl,
+    "leiden_bioscience_nl": search_leiden_bioscience_nl,
+    "academictransfer_nl": search_academictransfer_nl,
     "northcyprus_cv": search_northcyprus_cv,
     "iskibris": search_iskibris,
     "trnc_research": search_trnc_research,
@@ -222,6 +246,7 @@ SUPPORTED_COUNTRIES = {
     "ch": "Switzerland",
     "de": "Germany",
     "gb": "United Kingdom",
+    "nl": "Netherlands",
     "tr": "Northern Cyprus",
 }
 
@@ -229,7 +254,7 @@ SOURCE_COUNTRIES = {
     "arbeitsagentur": {"de"},
     "arbeitnow": {"de"},
     "indeed": {"de"},
-    "linkedin": {"at", "be", "ch", "de", "gb", "tr"},
+    "linkedin": {"at", "be", "ch", "de", "gb", "nl", "tr"},
     "karriere_at": {"at"},
     "jobs_ch": {"ch"},
     "jobup_ch": {"ch"},
@@ -242,6 +267,11 @@ SOURCE_COUNTRIES = {
     "arcs_community": {"gb"},
     "english_jobs_be": {"be"},
     "stepstone_be": {"be"},
+    "iamexpat_nl": {"nl"},
+    "undutchables_nl": {"nl"},
+    "bcf_career_nl": {"nl"},
+    "leiden_bioscience_nl": {"nl"},
+    "academictransfer_nl": {"nl"},
     "northcyprus_cv": {"tr"},
     "iskibris": {"tr"},
     "trnc_research": {"tr"},
@@ -852,3 +882,140 @@ def bookmarks_delete_endpoint(bookmark_id: str) -> dict[str, bool]:
     if not removed:
         raise HTTPException(status_code=404, detail="Bookmark not found")
     return {"deleted": True}
+
+
+@app.post("/api/cv/suggestions", response_model=CvSuggestionsResponse)
+def cv_suggestions_endpoint(payload: CvImproveRequest) -> CvSuggestionsResponse:
+    """Return structured CV improvement suggestion cards."""
+    return analyze_cv_suggestions(payload, get_profile())
+
+
+@app.post("/api/profile/generate-summary")
+def profile_generate_summary_endpoint(payload: ProfileSummaryRequest) -> dict:
+    """Use the LLM to write a professional profile summary from CV text."""
+    from app.services.document_service import get_document
+    cv_text = payload.cv_text
+    if not cv_text and payload.document_id:
+        doc = get_document(payload.document_id)
+        if doc:
+            cv_text = doc.text
+    if not cv_text:
+        profile = get_profile()
+        cv_text = profile.cv_summary
+    llm = LlmAdapter()
+    summary = generate_profile_summary_with_llm(cv_text, llm)
+    if summary:
+        profile = get_profile()
+        profile.cv_summary = summary
+        save_profile(profile)
+    return {"summary": summary}
+
+
+@app.post("/api/artifacts/roadmap", response_model=ArtifactRoadmapResponse)
+def artifact_roadmap_endpoint(payload: ArtifactRoadmapRequest) -> ArtifactRoadmapResponse:
+    """Generate a structured job application roadmap for the given job and country."""
+    job = payload.job
+    country = payload.target_country or (job.location or "").lower()
+    profile = payload.profile or get_profile()
+
+    # Country-specific visa / work permit info
+    visa_map = {
+        "de": "EU citizens: free movement. Non-EU: EU Blue Card or work visa via German embassy. Registration (Anmeldung) required within 14 days of arrival.",
+        "at": "EU citizens: free movement. Non-EU: Red-White-Red Card or EU Blue Card. Registration (Meldezettel) required.",
+        "ch": "EU/EFTA citizens: residence permit B. Non-EU: highly restricted — employer sponsorship required. Register at local Einwohnerkontrolle.",
+        "gb": "Skilled Worker Visa required for non-UK/Irish citizens. Employer must be a licensed sponsor. Points-based system.",
+        "be": "EU citizens: register with commune within 3 months. Non-EU: single permit required.",
+        "tr": "Work permit required for foreigners in Northern Cyprus (TRNC). Apply via employer at the Ministry of Labour.",
+    }
+    lang_map = {
+        "de": "German (B2–C1 recommended for most roles). English accepted in international companies.",
+        "at": "German (B2–C1). Vienna has many English-speaking opportunities.",
+        "ch": "German/French/Italian depending on region. English widely used in Zurich/Basel.",
+        "gb": "English (C1 minimum for professional roles).",
+        "be": "Dutch/French/German depending on region. English widely spoken in Brussels.",
+        "tr": "Turkish preferred. English accepted in international or academic settings.",
+    }
+
+    country_key = ""
+    for k in visa_map:
+        if k in country:
+            country_key = k
+            break
+
+    visa_info = visa_map.get(country_key, "Check local immigration authority for work permit requirements.")
+    lang_req = lang_map.get(country_key, "Language requirements depend on the role and company.")
+
+    # Build checklist steps
+    steps = [
+        ArtifactRoadmapStep(
+            category="Documents",
+            title="Update your CV",
+            description=f"Tailor your CV for '{job.title}' at {job.company or 'the company'}. Use role-specific keywords.",
+            required=True,
+        ),
+        ArtifactRoadmapStep(
+            category="Documents",
+            title="Write a cover letter",
+            description="Draft a targeted cover letter addressing the job requirements directly.",
+            required=True,
+        ),
+        ArtifactRoadmapStep(
+            category="Documents",
+            title="Gather certificates & diplomas",
+            description="Collect degree certificates, language certificates, and professional qualifications.",
+            required=True,
+        ),
+        ArtifactRoadmapStep(
+            category="Immigration",
+            title="Check visa / work permit requirements",
+            description=visa_info,
+            required=True,
+        ),
+        ArtifactRoadmapStep(
+            category="Language",
+            title="Verify language requirements",
+            description=lang_req,
+            required=True,
+        ),
+        ArtifactRoadmapStep(
+            category="Application",
+            title="Submit application",
+            description=f"Apply via: {job.apply_url or job.source_url or 'the company website'}.",
+            required=True,
+            link=job.apply_url or job.source_url or "",
+        ),
+        ArtifactRoadmapStep(
+            category="Follow-up",
+            title="Track and follow up",
+            description="Add to your application tracker. Follow up by email after 1–2 weeks if no response.",
+            required=False,
+        ),
+    ]
+
+    documents_needed = [
+        "CV (tailored to role)",
+        "Cover letter",
+        "Degree certificate(s) with certified translation if required",
+        "Language certificate (e.g. Goethe, IELTS, DELF)",
+        "Reference letters or work certificates",
+        "Passport / ID copy",
+    ]
+
+    tips = [
+        "Apply within the first 3 days of a posting — early applicants get more callbacks.",
+        "Customise the first paragraph of your cover letter to mention the company by name.",
+        f"Use the AI chat to draft a cover letter for this specific role.",
+        "Save the job in your tracker immediately so you can follow up.",
+    ]
+
+    return ArtifactRoadmapResponse(
+        job_title=job.title,
+        company=job.company or "",
+        country=country_key or country,
+        steps=steps,
+        documents_needed=documents_needed,
+        visa_info=visa_info,
+        language_requirements=lang_req,
+        timeline_weeks=4,
+        tips=tips,
+    )

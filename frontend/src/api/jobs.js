@@ -20,6 +20,8 @@ const api = axios.create({
   timeout: 30000,
 });
 
+const SEARCH_TIMEOUT_MS = 90000;
+
 function apiUrl(path) {
   return `${API_BASE_URL.replace(/\/$/, "")}${path}`;
 }
@@ -30,6 +32,10 @@ function localApiUrl(path) {
 
 function shouldRetryLocal(status) {
   return isLocalHost() && [404, 405, 502, 503, 504].includes(status);
+}
+
+function isNetworkFetchError(error) {
+  return error instanceof TypeError || /failed to fetch|networkerror|load failed/i.test(error?.message || "");
 }
 
 async function postWithLocalFallback(path, payload) {
@@ -60,6 +66,7 @@ export async function searchJobs({
   refresh = false,
 }) {
   const response = await api.get("/api/jobs/search", {
+    timeout: SEARCH_TIMEOUT_MS,
     params: {
       query,
       location,
@@ -112,20 +119,12 @@ export async function streamChatMessage({
   const streamPath = USE_GET_CHAT
     ? `/api/jobs/chat/stream?${chatQuery({ message, conversationId })}`
     : "/api/jobs/chat/stream";
-  let response = await fetch(apiUrl(streamPath), USE_GET_CHAT ? {
-    method: "GET",
-    headers: { Accept: "text/event-stream" },
-  } : {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Accept: "text/event-stream",
-    },
-    body: JSON.stringify(payload),
-  });
-
-  if (!response.ok && shouldRetryLocal(response.status) && API_BASE_URL !== LOCAL_BACKEND_URL) {
-    response = await fetch(localApiUrl("/api/jobs/chat/stream"), {
+  let response;
+  try {
+    response = await fetch(apiUrl(streamPath), USE_GET_CHAT ? {
+      method: "GET",
+      headers: { Accept: "text/event-stream" },
+    } : {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -133,6 +132,25 @@ export async function streamChatMessage({
       },
       body: JSON.stringify(payload),
     });
+  } catch (error) {
+    error.fallbackable = isNetworkFetchError(error);
+    throw error;
+  }
+
+  if (!response.ok && shouldRetryLocal(response.status) && API_BASE_URL !== LOCAL_BACKEND_URL) {
+    try {
+      response = await fetch(localApiUrl("/api/jobs/chat/stream"), {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "text/event-stream",
+        },
+        body: JSON.stringify(payload),
+      });
+    } catch (error) {
+      error.fallbackable = isNetworkFetchError(error);
+      throw error;
+    }
   }
 
   if (!response.ok) {
@@ -301,5 +319,20 @@ export async function createApplication(payload) {
 
 export async function updateApplication(id, payload) {
   const response = await api.patch(`/api/applications/${id}`, payload);
+  return response.data;
+}
+
+export async function getCvSuggestions(payload) {
+  const response = await api.post("/api/cv/suggestions", payload);
+  return response.data;
+}
+
+export async function generateProfileSummary(payload) {
+  const response = await api.post("/api/profile/generate-summary", payload);
+  return response.data;
+}
+
+export async function generateArtifactRoadmap(payload) {
+  const response = await api.post("/api/artifacts/roadmap", payload);
   return response.data;
 }

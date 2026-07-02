@@ -201,6 +201,37 @@ def _stepstone_be_url(query: str, location: str) -> str:
     return f"https://www.stepstone.be/jobs/{query_slug}/in-{location_slug}"
 
 
+def _iamexpat_nl_url(query: str, location: str) -> str:
+    return f"https://www.iamexpat.nl/career/jobs-netherlands?{urlencode({'language': 'english'})}"
+
+
+def _undutchables_nl_url(query: str, location: str) -> str:
+    params = {}
+    if location:
+        params["location"] = location
+    suffix = f"?{urlencode(params)}" if params else ""
+    return f"https://undutchables.nl/vacancies{suffix}"
+
+
+def _bcf_career_nl_url(query: str, location: str) -> str:
+    return "https://www.bcfcareer.nl/p/6/jobs"
+
+
+def _leiden_bioscience_nl_url(query: str, location: str) -> str:
+    params = {}
+    if query:
+        params["search"] = query
+    suffix = f"?{urlencode(params)}" if params else ""
+    return f"https://jobs.leidenbiosciencepark.nl/vacancies{suffix}"
+
+
+def _academictransfer_nl_url(query: str, location: str) -> str:
+    params = {}
+    if query:
+        params["q"] = query
+    return f"https://www.academictransfer.com/en/jobs/?{urlencode(params)}" if params else "https://www.academictransfer.com/en/jobs/"
+
+
 def _strip_markdown(value: str | None) -> str | None:
     cleaned = _clean(value)
     if not cleaned:
@@ -668,6 +699,247 @@ def _parse_stepstone_be(text: str, portal: Portal) -> list[JobPosting]:
     return results[:25]
 
 
+def _parse_iamexpat_nl(text: str, portal: Portal) -> list[JobPosting]:
+    results: list[JobPosting] = []
+    seen: set[str] = set()
+    blocks = re.findall(
+        r'(<a(?=[^>]*class="[^"]*JobBoardItemCard_cardWrapper__[^"]*")[^>]*>)(.*?)(?=</a>)',
+        text,
+        flags=re.DOTALL | re.IGNORECASE,
+    )
+
+    for tag, block in blocks:
+        href = _attr(tag, "href")
+        url = _absolute_url(portal, href)
+        if not url or url in seen:
+            continue
+        seen.add(url)
+        title_match = re.search(
+            r'<span[^>]+class="[^"]*title-7[^"]*"[^>]*>(.*?)</span>',
+            block,
+            flags=re.DOTALL | re.IGNORECASE,
+        )
+        if not title_match:
+            continue
+
+        category = re.search(
+            r'<div[^>]+class="[^"]*uppercase[^"]*"[^>]*>(.*?)</div>',
+            block,
+            flags=re.DOTALL | re.IGNORECASE,
+        )
+        plain_lines = [
+            item
+            for item in (_clean(line) for line in re.findall(r"</svg>\s*([^<]+)</div>", block))
+            if item
+        ]
+        posted = next((line.replace("Posted date ", "") for line in plain_lines if line.startswith("Posted date ")), None)
+        locations = [line for line in plain_lines if not line.startswith("Posted date ")]
+
+        results.append(
+            JobPosting(
+                title=_clean(title_match.group(1)) or "",
+                location=_portal_location(portal, locations[0] if locations else None),
+                description=_clean(category.group(1)) if category else "English-speaking role",
+                source=portal.source,
+                source_url=url,
+                apply_url=url,
+                date_posted=posted,
+                is_remote="remote" in block.lower() or "hybrid" in block.lower(),
+            )
+        )
+
+    return results[:25]
+
+
+def _parse_undutchables_nl(text: str, portal: Portal) -> list[JobPosting]:
+    results: list[JobPosting] = []
+    seen: set[str] = set()
+    blocks = re.findall(
+        r'(<a(?=[^>]*class="vacancy-item")[^>]*>)(.*?)</a>',
+        text,
+        flags=re.DOTALL | re.IGNORECASE,
+    )
+
+    for tag, block in blocks:
+        href = _attr(tag, "href")
+        url = _absolute_url(portal, href)
+        if not url or url in seen:
+            continue
+        title = re.search(r"<h4[^>]*>(.*?)</h4>", block, flags=re.DOTALL | re.IGNORECASE)
+        if not title:
+            continue
+        seen.add(url)
+        location = re.search(
+            r'<div[^>]+class="location"[^>]*>(.*?)</div>',
+            block,
+            flags=re.DOTALL | re.IGNORECASE,
+        )
+        title_text = _clean(title.group(1)) or ""
+
+        results.append(
+            JobPosting(
+                title=title_text,
+                location=_portal_location(portal, _clean(location.group(1)) if location else None),
+                description="International and multilingual Netherlands vacancy",
+                source=portal.source,
+                source_url=url,
+                apply_url=url,
+                is_remote="remote" in title_text.lower() or "hybrid" in title_text.lower(),
+            )
+        )
+
+    return results[:25]
+
+
+def _parse_bcf_career_nl(text: str, portal: Portal) -> list[JobPosting]:
+    results: list[JobPosting] = []
+    seen: set[str] = set()
+    blocks = re.findall(
+        r'<(?:article|div|li)[^>]+class="[^"]*(?:vacancy|job)[^"]*"[^>]*>.*?</(?:article|div|li)>',
+        text,
+        flags=re.DOTALL | re.IGNORECASE,
+    )
+
+    for block in blocks:
+        if "no jobs found" in block.lower() or "no vacancies were found" in block.lower():
+            continue
+        link = re.search(r'<a[^>]+href="([^"]+)"[^>]*>(.*?)</a>', block, flags=re.DOTALL | re.IGNORECASE)
+        title = _clean(link.group(2)) if link else None
+        if not title:
+            heading = re.search(r"<h[2-4][^>]*>(.*?)</h[2-4]>", block, flags=re.DOTALL | re.IGNORECASE)
+            title = _clean(heading.group(1)) if heading else None
+        if not title or len(title) < 5:
+            continue
+
+        url = _absolute_url(portal, link.group(1)) if link else portal.base_url
+        if not url or url in seen:
+            continue
+        seen.add(url)
+
+        company = re.search(
+            r'class="[^"]*(?:company|employer|organisation)[^"]*"[^>]*>(.*?)</',
+            block,
+            flags=re.DOTALL | re.IGNORECASE,
+        )
+        location = re.search(
+            r'class="[^"]*(?:location|place)[^"]*"[^>]*>(.*?)</',
+            block,
+            flags=re.DOTALL | re.IGNORECASE,
+        )
+        results.append(
+            JobPosting(
+                title=title,
+                company=_clean(company.group(1)) if company else None,
+                location=_portal_location(portal, _clean(location.group(1)) if location else None),
+                description="Life sciences, biotech, chemistry, food, and pharma vacancy",
+                source=portal.source,
+                source_url=url,
+                apply_url=url,
+                is_remote="remote" in block.lower() or "hybrid" in block.lower(),
+            )
+        )
+
+    return results[:25]
+
+
+def _parse_leiden_bioscience_nl(text: str, portal: Portal) -> list[JobPosting]:
+    results: list[JobPosting] = []
+    seen: set[str] = set()
+    blocks = re.findall(
+        r'<div[^>]+class="[^"]*card[^"]*"[^>]*>.*?(?=<div[^>]+wire:snapshot="[^"]*components\.vacancy-item|</div>\s*</div>\s*</div>\s*<footer)',
+        text,
+        flags=re.DOTALL | re.IGNORECASE,
+    )
+
+    for block in blocks:
+        if "components.vacancy-item" not in block:
+            continue
+        key = None
+        key_match = re.search(r'&quot;key&quot;:&quot;([^&]+)&quot;,&quot;s&quot;:&quot;mdl&quot;', block)
+        if key_match:
+            key = html.unescape(key_match.group(1))
+        title_match = re.search(
+            r'<a[^>]+class="[^"]*h4[^"]*"[^>]+title="([^"]+)"',
+            block,
+            flags=re.DOTALL | re.IGNORECASE,
+        )
+        title = _clean(title_match.group(1)) if title_match else None
+        if not title:
+            continue
+
+        url = f"{portal.base_url}/vacancies/{key}" if key else portal.base_url + "/vacancies"
+        if url in seen:
+            continue
+        seen.add(url)
+        company = re.search(r'<img[^>]+(?:title|alt)="([^"]+)"', block, flags=re.DOTALL | re.IGNORECASE)
+        locations = re.findall(
+            r'<div[^>]+title="([^"]*Netherlands[^"]*)"[^>]*>',
+            block,
+            flags=re.DOTALL | re.IGNORECASE,
+        )
+        categories = re.findall(
+            r'<div[^>]+class="[^"]*label[^"]*"[^>]*>(.*?)</div>',
+            block,
+            flags=re.DOTALL | re.IGNORECASE,
+        )
+        description = " | ".join(item for item in (_clean(category) for category in categories) if item)
+
+        results.append(
+            JobPosting(
+                title=title,
+                company=_clean(company.group(1)) if company else None,
+                location=_portal_location(portal, locations[0] if locations else "Leiden"),
+                description=description or "Leiden Bio Science Park life sciences vacancy",
+                source=portal.source,
+                source_url=url,
+                apply_url=url,
+                is_remote="remote" in block.lower() or "hybrid" in block.lower(),
+            )
+        )
+
+    return results[:25]
+
+
+def _parse_academictransfer_nl(text: str, portal: Portal) -> list[JobPosting]:
+    results: list[JobPosting] = []
+    seen: set[str] = set()
+    for match in re.finditer(
+        r'https://www\.academictransfer\.com/en/jobs/(\d+)/([^/"\\]+?)/',
+        text,
+        flags=re.IGNORECASE,
+    ):
+        job_id, slug = match.groups()
+        if slug == "apply":
+            continue
+        url = f"https://www.academictransfer.com/en/jobs/{job_id}/{slug}/"
+        if url in seen or "/apply/" in url:
+            continue
+        seen.add(url)
+        title = _clean(slug.replace("-", " ").title())
+        window = text[max(0, match.start() - 2500) : min(len(text), match.end() + 2500)]
+        employer = re.search(r'"name":\s*"([^"]+)"', window)
+        city = re.search(r'"city":\s*"([^"]+)"', window)
+        if not city:
+            city = re.search(r'\b(Amsterdam|Rotterdam|Leiden|Utrecht|Delft|Wageningen|Groningen|Maastricht|Eindhoven|Enschede|Tilburg)\b', window)
+
+        results.append(
+            JobPosting(
+                title=title or "",
+                company=html.unescape(employer.group(1)) if employer else None,
+                location=_portal_location(portal, city.group(1) if city else None),
+                description="Academic, PhD, postdoc, research, or university-level Netherlands vacancy",
+                source=portal.source,
+                source_url=url,
+                apply_url=url,
+                is_remote="remote" in window.lower() or "hybrid" in window.lower(),
+            )
+        )
+        if len(results) >= 25:
+            break
+
+    return results
+
+
 def _parse_northcyprus_cv(text: str, portal: Portal) -> list[JobPosting]:
     results: list[JobPosting] = []
     seen: set[str] = set()
@@ -879,6 +1151,41 @@ PORTALS = {
         parser=_parse_stepstone_be,
         country_name="Belgium",
     ),
+    "iamexpat_nl": Portal(
+        source="IamExpat Netherlands",
+        base_url="https://www.iamexpat.nl",
+        url_builder=_iamexpat_nl_url,
+        parser=_parse_iamexpat_nl,
+        country_name="Netherlands",
+    ),
+    "undutchables_nl": Portal(
+        source="Undutchables",
+        base_url="https://undutchables.nl",
+        url_builder=_undutchables_nl_url,
+        parser=_parse_undutchables_nl,
+        country_name="Netherlands",
+    ),
+    "bcf_career_nl": Portal(
+        source="BCF Career",
+        base_url="https://www.bcfcareer.nl",
+        url_builder=_bcf_career_nl_url,
+        parser=_parse_bcf_career_nl,
+        country_name="Netherlands",
+    ),
+    "leiden_bioscience_nl": Portal(
+        source="Leiden Bio Science Park",
+        base_url="https://jobs.leidenbiosciencepark.nl",
+        url_builder=_leiden_bioscience_nl_url,
+        parser=_parse_leiden_bioscience_nl,
+        country_name="Netherlands",
+    ),
+    "academictransfer_nl": Portal(
+        source="AcademicTransfer",
+        base_url="https://www.academictransfer.com",
+        url_builder=_academictransfer_nl_url,
+        parser=_parse_academictransfer_nl,
+        country_name="Netherlands",
+    ),
     "northcyprus_cv": Portal(
         source="NorthCyprus.cv",
         base_url="https://northcyprus.cv",
@@ -977,6 +1284,26 @@ def search_arcs_community(query: str, location: str = "") -> list[JobPosting]:
 
 def search_english_jobs_be(query: str, location: str = "") -> list[JobPosting]:
     return search_portal("english_jobs_be", query, location)
+
+
+def search_iamexpat_nl(query: str, location: str = "") -> list[JobPosting]:
+    return search_portal("iamexpat_nl", query, location)
+
+
+def search_undutchables_nl(query: str, location: str = "") -> list[JobPosting]:
+    return search_portal("undutchables_nl", query, location)
+
+
+def search_bcf_career_nl(query: str, location: str = "") -> list[JobPosting]:
+    return search_portal("bcf_career_nl", query, location)
+
+
+def search_leiden_bioscience_nl(query: str, location: str = "") -> list[JobPosting]:
+    return search_portal("leiden_bioscience_nl", query, location)
+
+
+def search_academictransfer_nl(query: str, location: str = "") -> list[JobPosting]:
+    return search_portal("academictransfer_nl", query, location)
 
 
 def search_stepstone_be(query: str, location: str = "") -> list[JobPosting]:

@@ -20,7 +20,7 @@ const PROVIDERS = [
   { key: "arbeitsagentur", label: "Arbeitsagentur", countries: ["de"] },
   { key: "arbeitnow", label: "Arbeitnow", countries: ["de"] },
   { key: "indeed", label: "Indeed", countries: ["de"], scraped: true },
-  { key: "linkedin", label: "LinkedIn", countries: ["de", "at", "ch", "gb", "be", "tr"], scraped: true },
+  { key: "linkedin", label: "LinkedIn", countries: ["de", "at", "ch", "gb", "be", "nl", "tr"], scraped: true },
   { key: "karriere_at", label: "Karriere.at", countries: ["at"] },
   { key: "jobs_ch", label: "Jobs.ch", countries: ["ch"] },
   { key: "jobup_ch", label: "Jobup.ch", countries: ["ch"] },
@@ -33,6 +33,11 @@ const PROVIDERS = [
   { key: "arcs_community", label: "ARCS Community", countries: ["gb"] },
   { key: "english_jobs_be", label: "EnglishJobs.be", countries: ["be"] },
   { key: "stepstone_be", label: "StepStone Belgium", countries: ["be"] },
+  { key: "iamexpat_nl", label: "IamExpat Netherlands", countries: ["nl"] },
+  { key: "undutchables_nl", label: "Undutchables", countries: ["nl"] },
+  { key: "bcf_career_nl", label: "BCF Career", countries: ["nl"] },
+  { key: "leiden_bioscience_nl", label: "Leiden Bio Science Park", countries: ["nl"] },
+  { key: "academictransfer_nl", label: "AcademicTransfer", countries: ["nl"] },
   { key: "northcyprus_cv", label: "NorthCyprus.cv", countries: ["tr"] },
   { key: "iskibris", label: "İş Kıbrıs", countries: ["tr"] },
   { key: "trnc_research", label: "TRNC Research", countries: ["tr"] },
@@ -44,6 +49,7 @@ const COUNTRIES = [
   { code: "ch", label: "Switzerland" },
   { code: "gb", label: "United Kingdom" },
   { code: "be", label: "Belgium" },
+  { code: "nl", label: "Netherlands" },
   { code: "tr", label: "Northern Cyprus" },
 ];
 
@@ -54,6 +60,12 @@ const RESEARCH_PORTALS = [
   { name: "Near East University", label: "Academic Careers", location: "Nicosia", href: "https://neu.edu.tr/career/career-opportunities/?lang=en" },
   { name: "Cyprus International University", label: "Career Application", location: "Nicosia", href: "https://intranet.ciu.edu.tr/hr/career-apply" },
 ];
+
+function providerKeysForCountries(countryCodes) {
+  return PROVIDERS
+    .filter((provider) => provider.countries.some((country) => countryCodes.includes(country)))
+    .map((provider) => provider.key);
+}
 
 const SAVED_SEARCHES_KEY = "jobPortal.savedSearches.v1";
 const MAX_SAVED_SEARCHES = 12;
@@ -126,7 +138,13 @@ export default function SearchPage() {
   }, [refreshCooldown]);
 
   function toggleSource(s) { setSelectedSources((c) => { if (c.includes(s)) { const n = c.filter((i) => i !== s); return n.length ? n : c; } return [...c, s]; }); }
-  function toggleCountry(code) { setSelectedCountries((c) => { if (c.includes(code)) { const n = c.filter((i) => i !== code); return n.length ? n : c; } return [...c, code]; }); }
+  function toggleCountry(code) {
+    setSelectedCountries((c) => {
+      if (c.includes(code)) { const n = c.filter((i) => i !== code); return n.length ? n : c; }
+      setSelectedSources((sources) => Array.from(new Set([...sources, ...providerKeysForCountries([code])])));
+      return [...c, code];
+    });
+  }
   function toggleAllCountries() { setSelectedCountries(allCountriesSelected ? [COUNTRIES[0].code] : COUNTRIES.map((i) => i.code)); }
 
   function saveSearchResult(data, overrideDescriptor = null) {

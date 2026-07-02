@@ -5,6 +5,8 @@ from app.models import (
     CvCompareResponse,
     CvImproveRequest,
     CvImproveResponse,
+    CvSuggestion,
+    CvSuggestionsResponse,
     FeedbackRequest,
     FeedbackResponse,
     InterviewPrepRequest,
@@ -37,6 +39,112 @@ def improve_cv(payload: CvImproveRequest, profile: UserProfile) -> CvImproveResp
         ],
         keywords=keywords,
     )
+
+
+def analyze_cv_suggestions(payload: CvImproveRequest, profile: UserProfile) -> CvSuggestionsResponse:
+    """Return structured, actionable CV improvement suggestions as cards."""
+    text = payload.cv_text or profile.cv_summary
+    target = payload.target_role or (payload.job.title if payload.job else "target role")
+    keywords = _keywords_for(target, payload.job.description if payload.job else "")
+    suggestions: list[CvSuggestion] = []
+
+    # Professional Summary check
+    if not text or len(text) < 100:
+        suggestions.append(CvSuggestion(
+            section="Professional Summary",
+            issue="Your CV summary is missing or very short.",
+            recommendation="Write a 3–5 sentence professional summary highlighting your top skills, years of experience, and career goal for the target role.",
+            priority="high",
+        ))
+    elif "summary" not in text.lower() and "profile" not in text.lower():
+        suggestions.append(CvSuggestion(
+            section="Professional Summary",
+            issue="No clear professional summary section detected.",
+            recommendation="Add a dedicated 'Professional Summary' or 'Profile' section at the top that is tailored to the role.",
+            priority="high",
+        ))
+
+    # Keywords check
+    text_lower = text.lower()
+    missing_keywords = [kw for kw in keywords if kw.lower() not in text_lower]
+    if missing_keywords:
+        suggestions.append(CvSuggestion(
+            section="Keywords & ATS",
+            issue=f"Missing {len(missing_keywords)} role-specific keywords: {', '.join(missing_keywords[:5])}.",
+            recommendation=f"Add these keywords naturally in your skills or experience section: {', '.join(missing_keywords[:8])}.",
+            priority="high",
+        ))
+
+    # Quantified achievements
+    if not any(char.isdigit() for char in text):
+        suggestions.append(CvSuggestion(
+            section="Achievements",
+            issue="No measurable achievements detected (no numbers or percentages).",
+            recommendation="Add quantified results e.g. 'Increased lab throughput by 30%', 'Managed 5-person team', 'Processed 200+ samples/week'.",
+            priority="high",
+        ))
+
+    # Skills section
+    skills_in_text = [s.lower() for s in profile.skills if s.lower() in text_lower]
+    if len(skills_in_text) < 3:
+        suggestions.append(CvSuggestion(
+            section="Skills",
+            issue="Your profile skills are not well-reflected in the CV text.",
+            recommendation=f"Explicitly list your skills: {', '.join(profile.skills[:8]) or 'add your key competencies'}.",
+            priority="medium",
+        ))
+
+    # Languages
+    if not profile.languages:
+        suggestions.append(CvSuggestion(
+            section="Languages",
+            issue="No languages listed in your profile.",
+            recommendation="Add a 'Languages' section with your proficiency level (e.g. English – C1, German – B2).",
+            priority="medium",
+        ))
+
+    # Action verbs
+    weak_verbs = ["responsible for", "helped with", "worked on", "involved in"]
+    if any(v in text_lower for v in weak_verbs):
+        suggestions.append(CvSuggestion(
+            section="Experience Bullets",
+            issue="Weak passive language detected ('responsible for', 'helped with', etc.).",
+            recommendation="Replace passive phrases with strong action verbs: 'Led', 'Developed', 'Optimized', 'Reduced', 'Achieved', 'Managed'.",
+            priority="medium",
+        ))
+
+    # Education / Certifications
+    if "education" not in text_lower and "degree" not in text_lower and "university" not in text_lower:
+        suggestions.append(CvSuggestion(
+            section="Education",
+            issue="No education section detected.",
+            recommendation="Add your highest qualification, institution, year, and any relevant modules or thesis topics.",
+            priority="medium",
+        ))
+
+    # Contact info
+    if "@" not in text and "linkedin" not in text_lower:
+        suggestions.append(CvSuggestion(
+            section="Contact Information",
+            issue="Email or LinkedIn profile not visible in the CV.",
+            recommendation="Ensure your email, LinkedIn URL, and optionally GitHub or portfolio link appear at the top.",
+            priority="low",
+        ))
+
+    # Calculate overall score
+    total_possible = 8
+    issues_count = len(suggestions)
+    score = max(0, min(100, int(((total_possible - issues_count) / total_possible) * 100)))
+
+    if score >= 80:
+        summary = "Your CV is in great shape! A few minor tweaks will make it perfect."
+    elif score >= 60:
+        summary = "Your CV has a solid foundation. Address the high-priority suggestions to significantly improve your chances."
+    else:
+        summary = "Your CV needs important improvements. Focus on the high-priority items first — they will have the biggest impact."
+
+    return CvSuggestionsResponse(suggestions=suggestions, overall_score=score, summary=summary)
+
 
 
 def compare_cvs(payload: CvCompareRequest) -> CvCompareResponse:

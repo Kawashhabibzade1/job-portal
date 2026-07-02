@@ -33,8 +33,16 @@ class LlmAdapter:
         return providers
 
     def status(self) -> dict[str, object]:
+        configured: list[str] = []
+        if self.openai_key:
+            configured.append("openai")
+        if self.grok_key:
+            configured.append("grok")
+        if self.gemini_key:
+            configured.append("gemini")
         return {
             "available": self.available_providers(),
+            "configured": configured,
             "default_provider": self.default_provider or self._preferred_provider(),
             "models": {
                 "openai": self.openai_model if self.openai_key else None,
